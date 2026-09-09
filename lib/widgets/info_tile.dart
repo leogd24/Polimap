@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../core/theme/app_theme.dart';
+
 class InfoTile extends StatelessWidget {
   const InfoTile({
     super.key,
@@ -37,7 +39,7 @@ class InfoTile extends StatelessWidget {
                 children: [
                   Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
                   const SizedBox(height: 3),
-                  Text(body, style: const TextStyle(color: Color(0xFF65746F))),
+                  Text(body, style: const TextStyle(color: AppColors.textSecondary)),
                 ],
               ),
             ),

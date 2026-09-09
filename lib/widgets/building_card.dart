@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/theme/app_theme.dart';
 import '../models/campus_building.dart';
 import '../screens/building_detail_screen.dart';
 
@@ -24,7 +25,7 @@ class BuildingCard extends StatelessWidget {
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: const Color(0xFFE2EAE7)),
+            border: Border.all(color: AppColors.border),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -47,7 +48,7 @@ class BuildingCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF0F4F2),
+                      color: AppColors.blueTint,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
@@ -66,10 +67,18 @@ class BuildingCard extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Text(
-                building.summary,
+                building.summary.isEmpty ? 'Sin información' : building.summary,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12, color: Color(0xFF687873), height: 1.25),
+                style: TextStyle(
+                  fontSize: 12,
+                  height: 1.25,
+                  color: building.summary.isEmpty
+                      ? AppColors.textMuted
+                      : AppColors.textSecondary,
+                  fontStyle:
+                      building.summary.isEmpty ? FontStyle.italic : FontStyle.normal,
+                ),
               ),
               const SizedBox(height: 12),
               Row(

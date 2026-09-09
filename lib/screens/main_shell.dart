@@ -6,6 +6,7 @@ import 'buildings_screen.dart';
 import 'campus_map_screen.dart';
 import 'home_screen.dart';
 import 'report_screen.dart';
+import 'schedule_screen.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -17,7 +18,13 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
 
-  static const _titles = ['Inicio', 'Mapa del campus', 'Edificios', 'Reportar'];
+  static const _titles = [
+    'Inicio',
+    'Mapa del campus',
+    'Edificios',
+    'Reportar',
+    'Mi horario',
+  ];
 
   void _openAssistant() {
     Navigator.of(context).push(
@@ -35,6 +42,7 @@ class _MainShellState extends State<MainShell> {
       const CampusMapScreen(),
       const BuildingsScreen(),
       const ReportScreen(),
+      const ScheduleScreen(),
     ];
 
     return Scaffold(
@@ -92,6 +100,11 @@ class _MainShellState extends State<MainShell> {
             icon: Icon(Icons.add_alert_outlined),
             selectedIcon: Icon(Icons.add_alert_rounded),
             label: 'Reportar',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.calendar_month_outlined),
+            selectedIcon: Icon(Icons.calendar_month_rounded),
+            label: 'Horario',
           ),
         ],
       ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/theme/app_theme.dart';
 import '../data/faq_entries.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/polimap_logo.dart';
@@ -39,7 +40,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
             margin: const EdgeInsets.fromLTRB(18, 8, 18, 16),
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: const Color(0xFF075A63),
+              color: AppColors.blue,
               borderRadius: BorderRadius.circular(24),
             ),
             child: const Row(
@@ -57,7 +58,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
                       SizedBox(height: 3),
                       Text(
                         'Escribe un trámite, servicio o lugar.',
-                        style: TextStyle(color: Color(0xFFD4E7E6)),
+                        style: TextStyle(color: AppColors.blueTint),
                       ),
                     ],
                   ),
@@ -103,8 +104,8 @@ class _AssistantScreenState extends State<AssistantScreen> {
                       return Card(
                         child: ExpansionTile(
                           leading: CircleAvatar(
-                            backgroundColor: const Color(0xFFE0EFEC),
-                            foregroundColor: const Color(0xFF075A63),
+                            backgroundColor: AppColors.blueTint,
+                            foregroundColor: AppColors.blue,
                             child: Icon(entry.icon, size: 21),
                           ),
                           title: Text(entry.question, style: const TextStyle(fontWeight: FontWeight.w800)),
@@ -114,7 +115,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
                               alignment: Alignment.centerLeft,
                               child: Text(
                                 entry.answer,
-                                style: const TextStyle(color: Color(0xFF566660), height: 1.45),
+                                style: const TextStyle(color: AppColors.textSecondary, height: 1.45),
                               ),
                             ),
                           ],

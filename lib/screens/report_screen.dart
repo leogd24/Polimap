@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/theme/app_theme.dart';
 import '../data/campus_buildings.dart';
 import '../widgets/form_label.dart';
 
@@ -38,7 +39,7 @@ class _ReportScreenState extends State<ReportScreen> {
     showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        icon: const Icon(Icons.check_circle_rounded, color: Color(0xFF168A63), size: 52),
+        icon: const Icon(Icons.check_circle_rounded, color: AppColors.blue, size: 52),
         title: const Text('Reporte preparado'),
         content: const Text(
           'La interfaz está lista. Al integrar la base de datos, el reporte se enviará a las autoridades escolares.',
@@ -74,19 +75,19 @@ class _ReportScreenState extends State<ReportScreen> {
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: const Color(0xFFFFF2DD),
+              color: AppColors.goldTint,
               borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: const Color(0xFFF0D3A0)),
+              border: Border.all(color: AppColors.gold),
             ),
             child: const Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.campaign_rounded, color: Color(0xFFA35D17)),
+                Icon(Icons.campaign_rounded, color: AppColors.goldDark),
                 SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     'Ayúdanos a mejorar el campus. No utilices este formulario para emergencias.',
-                    style: TextStyle(color: Color(0xFF754515), height: 1.35, fontWeight: FontWeight.w700),
+                    style: TextStyle(color: AppColors.goldDark, height: 1.35, fontWeight: FontWeight.w700),
                   ),
                 ),
               ],
@@ -135,7 +136,7 @@ class _ReportScreenState extends State<ReportScreen> {
           const FormLabel(number: '3', label: 'Fotografía'),
           const SizedBox(height: 9),
           Material(
-            color: _photoAdded ? const Color(0xFFE5F3ED) : Colors.white,
+            color: _photoAdded ? AppColors.goldTint : Colors.white,
             borderRadius: BorderRadius.circular(20),
             child: InkWell(
               borderRadius: BorderRadius.circular(20),
@@ -145,7 +146,7 @@ class _ReportScreenState extends State<ReportScreen> {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: _photoAdded ? const Color(0xFF5BAE8E) : const Color(0xFFD9E3DF),
+                    color: _photoAdded ? AppColors.gold : AppColors.border,
                   ),
                 ),
                 child: Column(
@@ -153,7 +154,7 @@ class _ReportScreenState extends State<ReportScreen> {
                   children: [
                     Icon(
                       _photoAdded ? Icons.check_circle_rounded : Icons.add_a_photo_outlined,
-                      color: _photoAdded ? const Color(0xFF168A63) : const Color(0xFF60716B),
+                      color: _photoAdded ? AppColors.goldDark : AppColors.textSecondary,
                       size: 34,
                     ),
                     const SizedBox(height: 8),
@@ -164,7 +165,7 @@ class _ReportScreenState extends State<ReportScreen> {
                     const SizedBox(height: 3),
                     const Text(
                       'Demostración de la interfaz',
-                      style: TextStyle(fontSize: 12, color: Color(0xFF71807B)),
+                      style: TextStyle(fontSize: 12, color: AppColors.textMuted),
                     ),
                   ],
                 ),

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../core/theme/app_theme.dart';
+
 class SectionHeader extends StatelessWidget {
   const SectionHeader({super.key, required this.title, required this.subtitle});
 
@@ -21,7 +23,7 @@ class SectionHeader extends StatelessWidget {
         Text(
           subtitle,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: const Color(0xFF687873),
+                color: AppColors.textSecondary,
               ),
         ),
       ],

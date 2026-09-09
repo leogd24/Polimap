@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../core/theme/app_theme.dart';
 import '../widgets/polimap_logo.dart';
 import 'main_shell.dart';
 
@@ -52,7 +53,7 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF063F46),
+      backgroundColor: AppColors.blueDeep,
       body: SafeArea(
         child: Center(
           child: FadeTransition(

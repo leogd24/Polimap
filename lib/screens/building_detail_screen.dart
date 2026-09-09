@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../core/theme/app_theme.dart';
 import '../models/campus_building.dart';
 import '../widgets/detail_title.dart';
 import '../widgets/info_tile.dart';
+import '../widgets/missing_info.dart';
 
 class BuildingDetailScreen extends StatelessWidget {
   const BuildingDetailScreen({super.key, required this.building});
@@ -73,60 +75,112 @@ class BuildingDetailScreen extends StatelessWidget {
                   style: TextStyle(color: building.color, fontWeight: FontWeight.w900),
                 ),
                 const SizedBox(height: 6),
-                Text(
-                  building.description,
-                  style: const TextStyle(fontSize: 16, height: 1.45, color: Color(0xFF45534F)),
-                ),
+                if (building.description.isEmpty)
+                  const MissingInfo()
+                else
+                  Text(
+                    building.description,
+                    style: const TextStyle(fontSize: 16, height: 1.45, color: AppColors.textSecondary),
+                  ),
                 const SizedBox(height: 22),
                 const DetailTitle(icon: Icons.room_service_rounded, title: 'Servicios'),
                 const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: building.services
-                      .map(
-                        (service) => Chip(
-                          avatar: Icon(Icons.check_circle_rounded, size: 17, color: building.color),
-                          label: Text(service),
-                          side: BorderSide(color: building.color.withValues(alpha: .18)),
-                          backgroundColor: building.color.withValues(alpha: .07),
-                        ),
-                      )
-                      .toList(),
-                ),
+                if (building.services.isEmpty)
+                  const MissingInfo()
+                else
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: building.services
+                        .map(
+                          (service) => Chip(
+                            avatar: Icon(Icons.check_circle_rounded, size: 17, color: building.color),
+                            label: Text(service),
+                            side: BorderSide(color: building.color.withValues(alpha: .18)),
+                            backgroundColor: building.color.withValues(alpha: .07),
+                          ),
+                        )
+                        .toList(),
+                  ),
                 const SizedBox(height: 22),
                 const DetailTitle(icon: Icons.layers_rounded, title: 'Espacios'),
                 const SizedBox(height: 8),
-                Card(
-                  child: Column(
-                    children: [
-                      for (var i = 0; i < building.spaces.length; i++) ...[
-                        ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: building.color.withValues(alpha: .1),
-                            foregroundColor: building.color,
-                            child: Text('${i + 1}'),
+                if (building.spaces.isEmpty)
+                  const MissingInfo()
+                else
+                  Card(
+                    child: Column(
+                      children: [
+                        for (var i = 0; i < building.spaces.length; i++) ...[
+                          ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: building.color.withValues(alpha: .1),
+                              foregroundColor: building.color,
+                              child: Text('${i + 1}'),
+                            ),
+                            title: Text(building.spaces[i]),
                           ),
-                          title: Text(building.spaces[i]),
-                        ),
-                        if (i < building.spaces.length - 1)
-                          const Divider(height: 1, indent: 72),
+                          if (i < building.spaces.length - 1)
+                            const Divider(height: 1, indent: 72),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
-                ),
+                if (building.procedures.isNotEmpty) ...[
+                  const SizedBox(height: 22),
+                  const DetailTitle(
+                    icon: Icons.assignment_turned_in_rounded,
+                    title: 'Trámites y requisitos',
+                  ),
+                  const SizedBox(height: 8),
+                  Card(
+                    child: Column(
+                      children: [
+                        for (var i = 0; i < building.procedures.length; i++) ...[
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  building.procedures[i].name,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    color: building.color,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  building.procedures[i].details,
+                                  style: const TextStyle(
+                                    color: AppColors.textSecondary,
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (i < building.procedures.length - 1)
+                            const Divider(height: 1, indent: 16, endIndent: 16),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 18),
                 InfoTile(
                   icon: Icons.schedule_rounded,
                   title: 'Horario de atención',
-                  body: building.hours,
+                  body: building.hours.isEmpty ? 'Sin información' : building.hours,
                   color: building.color,
                 ),
                 const SizedBox(height: 10),
                 InfoTile(
                   icon: Icons.accessible_forward_rounded,
                   title: 'Accesibilidad',
-                  body: building.accessibility,
+                  body: building.accessibility.isEmpty
+                      ? 'Sin información'
+                      : building.accessibility,
                   color: building.color,
                 ),
                 const SizedBox(height: 20),

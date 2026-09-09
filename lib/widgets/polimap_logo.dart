@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../core/theme/app_theme.dart';
+
 class PolimapLogo extends StatelessWidget {
   const PolimapLogo({super.key, this.size = 48, this.dark = false});
 
@@ -8,12 +10,12 @@ class PolimapLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final foreground = dark ? const Color(0xFF063F46) : Colors.white;
+    final foreground = dark ? AppColors.blue : Colors.white;
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: dark ? Colors.white : const Color(0xFF075A63),
+        color: dark ? Colors.white : AppColors.blue,
         borderRadius: BorderRadius.circular(size * 0.28),
         boxShadow: [
           BoxShadow(
@@ -34,7 +36,7 @@ class PolimapLogo extends StatelessWidget {
               width: size * 0.28,
               height: size * 0.28,
               decoration: const BoxDecoration(
-                color: Color(0xFFF2A93B),
+                color: AppColors.gold,
                 shape: BoxShape.circle,
               ),
               child: Icon(

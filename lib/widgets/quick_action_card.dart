@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../core/theme/app_theme.dart';
+
 class QuickActionCard extends StatelessWidget {
   const QuickActionCard({
     super.key,
@@ -26,7 +28,7 @@ class QuickActionCard extends StatelessWidget {
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: const Color(0xFFE3EAE7)),
+            border: Border.all(color: AppColors.border),
           ),
           child: Row(
             children: [

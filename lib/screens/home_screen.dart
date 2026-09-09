@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/theme/app_theme.dart';
 import '../data/campus_buildings.dart';
 import '../widgets/notice_card.dart';
 import '../widgets/quick_action_card.dart';
@@ -26,13 +27,13 @@ class HomeScreen extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(28),
             gradient: const LinearGradient(
-              colors: [Color(0xFF075A63), Color(0xFF0C7A72)],
+              colors: [AppColors.blue, AppColors.blueLight],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF075A63).withValues(alpha: 0.24),
+                color: AppColors.blue.withValues(alpha: 0.24),
                 blurRadius: 25,
                 offset: const Offset(0, 12),
               ),
@@ -80,7 +81,7 @@ class HomeScreen extends StatelessWidget {
               FilledButton.icon(
                 style: FilledButton.styleFrom(
                   backgroundColor: Colors.white,
-                  foregroundColor: const Color(0xFF075A63),
+                  foregroundColor: AppColors.blue,
                   padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
                 ),
                 onPressed: onOpenAssistant,
@@ -107,19 +108,19 @@ class HomeScreen extends StatelessWidget {
             QuickActionCard(
               icon: Icons.map_rounded,
               title: 'Ver mapa',
-              color: const Color(0xFF246B8E),
+              color: AppColors.blue,
               onTap: () => onNavigate(1),
             ),
             QuickActionCard(
               icon: Icons.apartment_rounded,
               title: 'Edificios',
-              color: const Color(0xFF367B5B),
+              color: AppColors.blue,
               onTap: () => onNavigate(2),
             ),
             QuickActionCard(
               icon: Icons.badge_rounded,
               title: 'Control Escolar',
-              color: const Color(0xFFB66A32),
+              color: AppColors.crimson,
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (_) => BuildingDetailScreen(
@@ -131,7 +132,7 @@ class HomeScreen extends StatelessWidget {
             QuickActionCard(
               icon: Icons.add_alert_rounded,
               title: 'Crear reporte',
-              color: const Color(0xFF8A5A94),
+              color: AppColors.gold,
               onTap: () => onNavigate(3),
             ),
           ],
@@ -146,14 +147,14 @@ class HomeScreen extends StatelessWidget {
           icon: Icons.info_outline_rounded,
           title: 'Versión inicial de POLIMAP',
           body: 'Las ubicaciones y horarios se validarán con cada área del plantel.',
-          color: Color(0xFF246B8E),
+          color: AppColors.blue,
         ),
         const SizedBox(height: 10),
         const NoticeCard(
           icon: Icons.accessible_forward_rounded,
           title: 'Rutas accesibles',
           body: 'Consulta en cada edificio sus accesos y rutas recomendadas.',
-          color: Color(0xFF367B5B),
+          color: AppColors.gold,
         ),
       ],
     );

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../core/theme/app_theme.dart';
+
 class NoticeCard extends StatelessWidget {
   const NoticeCard({
     super.key,
@@ -40,7 +42,7 @@ class NoticeCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     body,
-                    style: const TextStyle(color: Color(0xFF65746F), height: 1.35),
+                    style: const TextStyle(color: AppColors.textSecondary, height: 1.35),
                   ),
                 ],
               ),

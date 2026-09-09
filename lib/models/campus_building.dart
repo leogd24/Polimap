@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'building_procedure.dart';
+
 class CampusBuilding {
   const CampusBuilding({
     required this.number,
@@ -12,7 +14,7 @@ class CampusBuilding {
     required this.accessibility,
     required this.icon,
     required this.color,
-    required this.mapPosition,
+    this.procedures = const [],
   });
 
   final int number;
@@ -25,5 +27,8 @@ class CampusBuilding {
   final String accessibility;
   final IconData icon;
   final Color color;
-  final Offset mapPosition;
+
+  /// Trámites con sus requisitos. Vacío mientras no haya información
+  /// confirmada del edificio.
+  final List<BuildingProcedure> procedures;
 }

@@ -1,146 +1,240 @@
 import 'package:flutter/material.dart';
 
+import '../core/theme/app_theme.dart';
+import '../models/building_procedure.dart';
 import '../models/campus_building.dart';
 
+/// Única fuente de información de los edificios.
+///
+/// Solo contiene datos confirmados por el plantel. Los campos vacíos se
+/// muestran en la app como "Sin información" y están pendientes de llenar.
 const campusBuildings = <CampusBuilding>[
   CampusBuilding(
     number: 1,
-    name: 'Aulas de generales',
-    summary: 'Salones y áreas de estudio',
+    name: 'Atención a alumnos',
+    summary: 'Trámites escolares, PLEX y Coordinación',
     description:
-        'Espacio académico con aulas de uso general y zonas para trabajo colaborativo.',
-    services: ['Clases', 'Asesorías', 'Área de estudio'],
-    spaces: ['Planta baja: aulas 1–6', 'Planta alta: aulas 7–12', 'Baños'],
-    hours: 'Lunes a viernes · 7:00–20:00',
-    accessibility: 'Acceso por rampa en la entrada principal.',
-    icon: Icons.school_rounded,
-    color: Color(0xFF246B8E),
-    mapPosition: Offset(0.12, 0.16)
+        'Aquí se atiende a los alumnos para sus trámites escolares. También están las oficinas de PLEX y de Coordinación.',
+    services: [
+      'Constancias',
+      'Kardex',
+      'Certificados parciales',
+      'Condonaciones',
+      'Bajas voluntarias',
+      'PLEX',
+      'Coordinación',
+      'Asesorías',
+    ],
+    spaces: ['Atención a alumnos', 'Oficinas de PLEX', 'Coordinación'],
+    hours: '',
+    accessibility: '',
+    icon: Icons.support_agent_rounded,
+    color: AppColors.blue,
+    procedures: [
+      BuildingProcedure(
+        name: 'Constancias',
+        details: 'Presenta tu código de alumno.',
+      ),
+      BuildingProcedure(
+        name: 'Kardex',
+        details: 'Presenta tu código de alumno.',
+      ),
+      BuildingProcedure(
+        name: 'Certificados parciales',
+        details:
+            'Se te entrega una ficha de pago. Tienes que llevar el recibo de que ya pagaste y fotos para la credencial.',
+      ),
+      BuildingProcedure(
+        name: 'Condonaciones de orden de pago',
+        details:
+            'Lleva tu orden de pago. Ahí te dan una nota y tienes que explicar por qué solicitas la condonación.',
+      ),
+      BuildingProcedure(
+        name: 'Bajas voluntarias',
+        details:
+            'Tiene que venir el alumno; si es menor de edad, acompañado de un tutor. Lleva documentos de identificación, la orden de pago pagada y el formato de pago, y llena el formato indicando el motivo de la baja.',
+      ),
+      BuildingProcedure(
+        name: 'Consulta de materias',
+        details: 'Los alumnos pueden revisar sus materias aquí.',
+      ),
+      BuildingProcedure(
+        name: 'PLEX',
+        details:
+            'En las oficinas de PLEX puedes inscribirte y consultar tus calificaciones de PLEX.',
+      ),
+      BuildingProcedure(
+        name: 'Recuperación de contraseña del correo institucional',
+        details:
+            'En Coordinación. Necesitas llevar tu correo institucional, número de teléfono con WhatsApp, código y nombre completo.',
+      ),
+      BuildingProcedure(
+        name: 'Asesorías de materias irregulares',
+        details:
+            'Regístrate en condonación con el formato que te van a dar. También atienden dudas sobre asesorías.',
+      ),
+      BuildingProcedure(
+        name: 'Atención a alumnos irregulares y honoríficos',
+        details: 'Los atiende Coordinación.',
+      ),
+      BuildingProcedure(
+        name: 'Plataforma de Classroom',
+        details: 'Coordinación le da mantenimiento a la plataforma.',
+      ),
+      BuildingProcedure(
+        name: 'Desempeño docente',
+        details:
+            'Coordinación evalúa el desempeño docente, capacita al personal docente y genera las constancias de desempeño docente.',
+      ),
+    ],
   ),
   CampusBuilding(
     number: 2,
-    name: 'Cómputo',
-    summary: 'Laboratorios y soporte tecnológico',
-    description:
-        'Laboratorios equipados para prácticas, programación y actividades digitales.',
-    services: ['Laboratorios', 'Prácticas', 'Soporte'],
-    spaces: ['Laboratorio A', 'Laboratorio B', 'Área de soporte'],
-    hours: 'Lunes a viernes · 7:00–19:00',
-    accessibility: 'Entrada accesible en el costado norte.',
-    icon: Icons.computer_rounded,
-    color: Color(0xFF5665A8),
-    mapPosition: Offset(0.40, 0.11),
+    name: 'Edificio 2',
+    summary: '',
+    description: '',
+    services: [],
+    spaces: [],
+    hours: '',
+    accessibility: '',
+    icon: Icons.apartment_rounded,
+    color: AppColors.blueLight,
   ),
   CampusBuilding(
     number: 3,
-    name: 'Talleres técnicos',
-    summary: 'Prácticas y formación técnica',
-    description:
-        'Área destinada a prácticas técnicas y trabajo con equipo especializado.',
-    services: ['Talleres', 'Prácticas técnicas', 'Almacén'],
-    spaces: ['Taller 1', 'Taller 2', 'Área de seguridad'],
-    hours: 'Según horario de clase',
-    accessibility: 'Acceso amplio a nivel de piso.',
-    icon: Icons.handyman_rounded,
-    color: Color(0xFF9B5C3C),
-    mapPosition: Offset(0.70, 0.16),
+    name: 'Edificio 3',
+    summary: 'Préstamo de cable HDMI',
+    description: '',
+    services: ['Préstamo de cable HDMI'],
+    spaces: [],
+    hours: '',
+    accessibility: '',
+    icon: Icons.cable_rounded,
+    color: AppColors.goldDark,
+    procedures: [
+      BuildingProcedure(
+        name: 'Préstamo de cable HDMI',
+        details:
+            'En el segundo piso, del lado derecho. Preséntate con tu credencial del Poli.',
+      ),
+    ],
   ),
   CampusBuilding(
     number: 4,
-    name: 'Biblioteca',
-    summary: 'Consulta, lectura y recursos',
-    description:
-        'Zona tranquila para consultar materiales, estudiar y realizar trabajos.',
-    services: ['Préstamo', 'Consulta', 'Área de lectura'],
-    spaces: ['Recepción', 'Acervo', 'Mesas de estudio'],
-    hours: 'Lunes a viernes · 8:00–19:00',
-    accessibility: 'Ruta accesible desde la explanada.',
-    icon: Icons.local_library_rounded,
-    color: Color(0xFF367B5B),
-    mapPosition: Offset(0.15, 0.43),
+    name: 'Edificio 4',
+    summary: '',
+    description: '',
+    services: [],
+    spaces: [],
+    hours: '',
+    accessibility: '',
+    icon: Icons.apartment_rounded,
+    color: AppColors.blueDeep,
   ),
   CampusBuilding(
     number: 5,
-    name: 'Psicología',
-    summary: 'Orientación y acompañamiento',
-    description:
-        'Atención psicológica y orientación para el bienestar de la comunidad estudiantil.',
-    services: ['Psicología', 'Orientación', 'Canalización'],
-    spaces: ['Recepción', 'Consultorios', 'Sala de espera', 'Baños'],
-    hours: 'Lunes a viernes · 8:00–16:00',
-    accessibility: 'Acceso por rampa desde el pasillo central.',
+    name: 'Edificio 5',
+    summary: 'Psicología, Servicio y Prácticas Profesionales y Oficialía Mayor',
+    description: '',
+    services: [
+      'Psicología',
+      'Servicio y prácticas profesionales',
+      'Titulación',
+      'Oficialía Mayor',
+    ],
+    spaces: [
+      'Coordinación de Servicio y Prácticas Profesionales',
+      'Oficina del Oficial Mayor',
+    ],
+    hours: '',
+    accessibility: '',
     icon: Icons.psychology_alt_rounded,
-    color: Color(0xFF8A5A94),
-    mapPosition: Offset(0.43, 0.39),
+    color: AppColors.blueSteel,
+    procedures: [
+      BuildingProcedure(
+        name: 'Servicio y prácticas profesionales',
+        details:
+            'Aquí está la coordinadora de Servicio y Prácticas Profesionales.',
+      ),
+      BuildingProcedure(
+        name: 'Titulación',
+        details:
+            'Lo atiende la misma coordinación de Servicio y Prácticas Profesionales.',
+      ),
+      BuildingProcedure(
+        name: 'Oficialía Mayor',
+        details: 'En este edificio está la oficina del Oficial Mayor.',
+      ),
+    ],
   ),
   CampusBuilding(
     number: 6,
-    name: 'Control Escolar',
-    summary: 'Documentos y trámites escolares',
-    description:
-        'Atención para constancias, kardex, credenciales y seguimiento de trámites.',
-    services: ['Kardex', 'Constancias', 'Credencial'],
-    spaces: ['Ventanillas', 'Sala de espera', 'Archivo'],
-    hours: 'Lunes a viernes · 9:00–15:00',
-    accessibility: 'Ventanilla accesible en planta baja.',
-    icon: Icons.badge_rounded,
-    color: Color(0xFFB66A32),
-    mapPosition: Offset(0.72, 0.42),
+    name: 'Edificio 6',
+    summary: '',
+    description: '',
+    services: [],
+    spaces: [],
+    hours: '',
+    accessibility: '',
+    icon: Icons.apartment_rounded,
+    color: AppColors.crimson,
   ),
   CampusBuilding(
     number: 7,
-    name: 'Coordinaciones',
-    summary: 'Atención académica',
-    description:
-        'Oficinas de coordinación para orientación sobre programas y asuntos académicos.',
-    services: ['Coordinación', 'Tutorías', 'Información'],
-    spaces: ['Recepción', 'Coordinaciones', 'Sala de juntas'],
-    hours: 'Lunes a viernes · 8:00–16:00',
-    accessibility: 'Planta baja con acceso sin escalones.',
-    icon: Icons.groups_rounded,
-    color: Color(0xFF2E7782),
-    mapPosition: Offset(0.10, 0.70),
+    name: 'Edificio 7',
+    summary: 'Sistema de internet del plantel',
+    description: '',
+    services: ['Sistema de internet'],
+    spaces: [
+      'Segundo piso: sistema de internet del plantel',
+      'Oficina del maestro a cargo del internet',
+    ],
+    hours: '',
+    accessibility: '',
+    icon: Icons.wifi_rounded,
+    color: AppColors.blue,
+    procedures: [
+      BuildingProcedure(
+        name: 'Sistema de internet del plantel',
+        details:
+            'En el segundo piso está la mayor parte del sistema de internet del Poli, junto con la oficina del maestro a cargo.',
+      ),
+    ],
   ),
   CampusBuilding(
     number: 8,
-    name: 'Servicios estudiantiles',
-    summary: 'PLEX y apoyo al estudiante',
-    description:
-        'Información y apoyo sobre actividades, programas y servicios complementarios.',
-    services: ['PLEX', 'Becas', 'Actividades'],
-    spaces: ['Módulo de atención', 'Sala multiusos', 'Oficinas'],
-    hours: 'Lunes a viernes · 8:00–17:00',
-    accessibility: 'Acceso frontal con rampa.',
-    icon: Icons.diversity_3_rounded,
-    color: Color(0xFF4D6C9D),
-    mapPosition: Offset(0.37, 0.69),
+    name: 'Edificio 8',
+    summary: '',
+    description: '',
+    services: [],
+    spaces: [],
+    hours: '',
+    accessibility: '',
+    icon: Icons.apartment_rounded,
+    color: AppColors.blueLight,
   ),
   CampusBuilding(
     number: 9,
-    name: 'Cafetería',
-    summary: 'Alimentos y descanso',
-    description:
-        'Área de alimentos con mesas y espacios para descansar entre clases.',
-    services: ['Alimentos', 'Bebidas', 'Área de descanso'],
-    spaces: ['Mostrador', 'Comedor', 'Lavabos'],
-    hours: 'Lunes a viernes · 7:00–18:00',
-    accessibility: 'Ingreso a nivel de explanada.',
-    icon: Icons.restaurant_rounded,
-    color: Color(0xFFAF7344),
-    mapPosition: Offset(0.68, 0.70),
+    name: 'Edificio 9',
+    summary: '',
+    description: '',
+    services: [],
+    spaces: [],
+    hours: '',
+    accessibility: '',
+    icon: Icons.apartment_rounded,
+    color: AppColors.goldDeep,
   ),
   CampusBuilding(
     number: 10,
-    name: 'Auditorio',
-    summary: 'Eventos y actividades',
-    description:
-        'Espacio para eventos académicos, culturales y reuniones de la comunidad.',
-    services: ['Eventos', 'Conferencias', 'Presentaciones'],
-    spaces: ['Vestíbulo', 'Auditorio', 'Escenario'],
-    hours: 'Según programación',
-    accessibility: 'Lugares reservados y entrada accesible.',
-    icon: Icons.theater_comedy_rounded,
-    color: Color(0xFF7E596C),
-    mapPosition: Offset(0.43, 0.86),
+    name: 'Edificio 10',
+    summary: '',
+    description: '',
+    services: [],
+    spaces: [],
+    hours: '',
+    accessibility: '',
+    icon: Icons.apartment_rounded,
+    color: AppColors.crimsonDark,
   ),
 ];
