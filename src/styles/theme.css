@@ -1,0 +1,40 @@
+/* Paleta institucional UdeG. Única fuente de color de la app:
+   ningún componente debe declarar colores literales.
+   Migrada de referenciaflutter/core/theme/app_theme.dart */
+@theme {
+  /* Colores base de la identidad */
+  --color-blue: #002d62; /* AZUL UdeG */
+  --color-crimson: #b32034; /* ROJO CARMESÍ */
+  --color-gold: #daa520; /* ORO UdeG */
+
+  /* Variaciones del azul: superficies, degradados y fondos oscuros */
+  --color-blue-deep: #001b3c;
+  --color-blue-steel: #24486f;
+  --color-blue-light: #0b4a93;
+  --color-blue-tint: #e4ebf5;
+
+  /* Variaciones de los acentos */
+  --color-crimson-dark: #7c1624;
+  --color-crimson-tint: #f9e6e9;
+  --color-gold-deep: #a6791a;
+  --color-gold-dark: #8a6410;
+  --color-gold-tint: #fbf2dd;
+
+  /* Neutros */
+  --color-background: #f3f5f9;
+  --color-surface: #ffffff;
+  --color-border: #dce3ed;
+  --color-text-primary: #14203a;
+  --color-text-secondary: #5d6980;
+  --color-text-muted: #93a0b5;
+
+  /* Tipografía */
+  --font-sans: 'Roboto', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* Radios equivalentes a los del tema de Flutter */
+  --radius-card: 22px;
+  --radius-tile: 20px;
+  --radius-input: 18px;
+  --radius-button: 16px;
+  --radius-hero: 28px;
+}

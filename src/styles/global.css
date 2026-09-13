@@ -1,0 +1,70 @@
+@import 'tailwindcss';
+@import './theme.css';
+
+/* Base equivalente al ThemeData de Flutter:
+   fondo de scaffold, color de texto y tipografía Roboto. */
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-background);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+}
+
+/* Íconos: misma familia Material que usa Flutter.
+   FILL 1 reproduce los `Icons.*_rounded`; FILL 0 los `Icons.*_outlined`. */
+.material-symbols-rounded {
+  font-family: 'Material Symbols Rounded';
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  user-select: none;
+}
+
+/* Oculta el contador de caracteres nativo y limpia los inputs. */
+input,
+textarea,
+select,
+button {
+  font-family: inherit;
+}
+
+textarea {
+  resize: none;
+}
+
+/* Scroll suave y sin barras visibles dentro de la app móvil. */
+.app-scroll {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.app-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* Efecto de toque parecido al InkWell de Material. */
+.tappable {
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 120ms ease, filter 120ms ease;
+}
+
+.tappable:active {
+  transform: scale(0.985);
+  filter: brightness(0.98);
+}
