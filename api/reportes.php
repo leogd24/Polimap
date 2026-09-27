@@ -9,9 +9,13 @@
  *                                                → todos, para el panel admin
  *   PATCH /api/reportes.php  (+ X-Admin-Token)   → cambia estado / comentario
  *
+ * Al crear un reporte, además de guardarlo, manda un aviso por correo
+ * (api/notificar.php). Si el correo falla, el reporte igual queda guardado.
+ *
  * Campos y categorías: ver docs/contrato-datos.md, sección 3.
  */
 require __DIR__ . '/database.php';
+require __DIR__ . '/notificar.php';   // aviso por correo de reportes nuevos
 
 const CATEGORIAS = ['basura', 'mobiliario', 'banos', 'fuga', 'iluminacion', 'riesgo', 'otro'];
 const ESTADOS    = ['recibido', 'revision', 'proceso', 'resuelto'];
@@ -92,11 +96,30 @@ function crear_reporte(): void
         error_json($msg, ($e->errorInfo[1] ?? 0) === 1452 ? 400 : 500);
     }
 
+    // 5) Aviso por correo (solo avisa: si falla, el reporte ya está guardado) --
+    $ubicacion = $zona ?? '';
+    if ($edificio !== null) {
+        $nombre = $pdo->prepare('SELECT name FROM edificios WHERE number = ?');
+        $nombre->execute([$edificio]);
+        $ubicacion = "Edificio $edificio · " . ($nombre->fetchColumn() ?: '');
+    }
+    $avisoEnviado = notificar_reporte([
+        'folio'       => $folio,
+        'categoria'   => $categoria,
+        'descripcion' => $descripcion,
+        'ubicacion'   => $ubicacion,
+        'lat'         => $lat,
+        'lng'         => $lng,
+        'anonimo'     => $anonimo,
+        'creado_en'   => $creado,
+    ], $foto ? $CONFIG['upload_dir'] . '/' . $foto : null);
+
     responder([
-        'ok'        => true,
-        'folio'     => $folio,
-        'estado'    => 'recibido',
-        'createdAt' => iso($creado),
+        'ok'           => true,
+        'folio'        => $folio,
+        'estado'       => 'recibido',
+        'createdAt'    => iso($creado),
+        'avisoEnviado' => $avisoEnviado,   // true si llegó el correo; false no es error
     ], 201);
 }
 
