@@ -1,6 +1,8 @@
 // Service worker mínimo: hace la app instalable y la deja abrir sin red.
-const CACHE = 'polimap-v1';
-const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
+// Cambia la versión cada vez que cambien íconos o archivos base, para que
+// los celulares que ya instalaron la app descarguen los nuevos.
+const CACHE = 'polimap-v2';
+const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.png', '/img/logo-polimap.png', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));
