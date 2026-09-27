@@ -2,3 +2,10 @@ node_modules
 dist
 .DS_Store
 *.local
+
+# API: la configuración real tiene contraseñas y no se sube
+api/config.php
+
+# Fotos que suben los usuarios (se guarda solo la regla de seguridad)
+api/uploads/*
+!api/uploads/.htaccess
