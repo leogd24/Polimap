@@ -20,7 +20,14 @@ require __DIR__ . '/notificar.php';   // aviso por correo de reportes nuevos
 const CATEGORIAS = ['basura', 'mobiliario', 'banos', 'fuga', 'iluminacion', 'riesgo', 'otro'];
 const ESTADOS    = ['recibido', 'revision', 'proceso', 'resuelto'];
 
-switch ($_SERVER['REQUEST_METHOD']) {
+// Algunos hostings gratuitos bloquean PATCH. Por eso el panel admin manda
+// POST /api/reportes.php?_method=PATCH y aquí lo tratamos como PATCH.
+$metodo = $_SERVER['REQUEST_METHOD'];
+if ($metodo === 'POST' && ($_GET['_method'] ?? '') === 'PATCH') {
+    $metodo = 'PATCH';
+}
+
+switch ($metodo) {
     case 'POST':  crear_reporte();   break;
     case 'GET':   listar_reportes(); break;
     case 'PATCH': cambiar_estado();  break;

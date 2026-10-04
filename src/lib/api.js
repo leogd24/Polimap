@@ -185,3 +185,27 @@ export async function getReports() {
     return locales;
   }
 }
+
+// -----------------------------------------------------------------------
+// Panel de administración (admin.html)
+// Estas funciones NO tienen respaldo local: si la API falla, lanzan el error
+// para que el panel lo muestre. Necesitan el admin_token de api/config.php.
+// -----------------------------------------------------------------------
+
+/** Todos los reportes, del más nuevo al más viejo. Error 401 = clave incorrecta. */
+export async function getAllReports(adminToken) {
+  return request('reportes.php', { headers: { 'X-Admin-Token': adminToken } });
+}
+
+/**
+ * Cambia el estado de un reporte y, opcional, deja un comentario.
+ * estado: 'recibido' | 'revision' | 'proceso' | 'resuelto'
+ * Se manda como POST ?_method=PATCH porque algunos hostings bloquean PATCH.
+ */
+export async function updateReport(adminToken, folio, estado, comentarioAdmin) {
+  return request('reportes.php?_method=PATCH', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Admin-Token': adminToken },
+    body: JSON.stringify({ folio, estado, comentarioAdmin }),
+  });
+}
