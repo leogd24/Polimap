@@ -1,42 +1,39 @@
-import { colors, alpha } from '../styles/theme.js';
-import Icon from './Icon.jsx';
+import { alpha } from '../styles/theme.js';
 
-/// Equivalente de widgets/polimap_logo.dart
-export default function PolimapLogo({ size = 48, dark = false }) {
-  const foreground = dark ? colors.blue : colors.white;
-
+/// Logo oficial de POLIMAP (la P con el ajolote).
+///
+/// Props (las mismas de antes, así ninguna pantalla cambia):
+///   size: tamaño en px del cuadro (por defecto 48).
+///   dark: se conserva por compatibilidad. El logo siempre va sobre un
+///         cuadro blanco para que sus colores se vean bien sobre el azul
+///         de la barra superior y sobre fondos claros.
+///
+/// La imagen está en public/img/logo-polimap.png (256 px). Si se cambia
+/// el logo, basta con reemplazar ese archivo y los de public/icons/.
+export default function PolimapLogo({ size = 48 }) {
   return (
     <div
       style={{
         width: size,
         height: size,
-        position: 'relative',
         flexShrink: 0,
-        backgroundColor: dark ? colors.white : colors.blue,
+        backgroundColor: '#ffffff',
         borderRadius: size * 0.28,
         boxShadow: `0 10px 24px ${alpha('#000000', 0.12)}`,
+        overflow: 'hidden',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
       }}
     >
-      <Icon name="map" size={size * 0.58} color={foreground} />
-      <div
-        style={{
-          position: 'absolute',
-          right: size * 0.12,
-          top: size * 0.08,
-          width: size * 0.28,
-          height: size * 0.28,
-          borderRadius: '50%',
-          backgroundColor: colors.gold,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <Icon name="location_on" size={size * 0.18} color={colors.white} />
-      </div>
+      <img
+        src="/img/logo-polimap.png"
+        alt="POLIMAP"
+        width={size}
+        height={size}
+        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+        draggable={false}
+      />
     </div>
   );
 }

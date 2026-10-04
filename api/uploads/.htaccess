@@ -1,0 +1,6 @@
+# Seguridad: en esta carpeta solo hay fotos. Apache nunca sirve ni ejecuta
+# archivos PHP de aquí, aunque alguien lograra subir uno.
+<FilesMatch "\.(php|phtml|phar|php\d)$">
+    Require all denied
+</FilesMatch>
+Options -Indexes
