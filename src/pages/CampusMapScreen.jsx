@@ -1,31 +1,21 @@
 import { campusBuildings } from '../data/campusBuildings.js';
-import RouteStop from '../components/RouteStop.jsx';
-import SectionHeader from '../components/SectionHeader.jsx';
+import CampusMap from '../components/CampusMap.jsx';
 
-/// Equivalente de screens/campus_map_screen.dart
+/// Pestaña "Mapa": muestra el mapa interactivo del campus (Marcos).
 export default function CampusMapScreen({ onOpenBuilding }) {
-  // El orden del recorrido lo marca el número del edificio, no el orden de
-  // la lista: agregar edificios nuevos a los datos los acomoda solos.
-  const route = [...campusBuildings].sort((a, b) => a.number - b.number);
+  // El mapa nos da solo el NÚMERO del edificio que tocaste.
+  // Aquí buscamos el edificio completo en los datos para abrir su ficha,
+  // porque así es como lo espera onOpenBuilding.
+  const abrirFicha = (numero) => {
+    const edificio = campusBuildings.find((b) => b.number === numero);
+    if (edificio) onOpenBuilding(edificio);
+  };
 
   return (
-    <div className="app-scroll flex-1 px-[18px] pt-3 pb-7">
-      <div className="pb-5">
-        <SectionHeader
-          title="Recorrido del campus"
-          subtitle={`Del edificio 1 al ${route.length}. Toca uno para ver su información.`}
-        />
-      </div>
-
-      {route.map((building, index) => (
-        <RouteStop
-          key={building.number}
-          building={building}
-          isFirst={index === 0}
-          isLast={index === route.length - 1}
-          onTap={() => onOpenBuilding(building)}
-        />
-      ))}
+    // flex-1 + min-h-0: el mapa ocupa todo el espacio libre de la pantalla
+    // (arriba de la barra de navegación de abajo).
+    <div className="relative flex-1 min-h-0">
+      <CampusMap alto="100%" onOpenBuilding={abrirFicha} />
     </div>
   );
 }
