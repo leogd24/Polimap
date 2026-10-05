@@ -17,6 +17,7 @@ import Card from '../components/Card.jsx';
 import FilledButton from '../components/FilledButton.jsx';
 import Icon from '../components/Icon.jsx';
 import PolimapLogo from '../components/PolimapLogo.jsx';
+import BrandStripe from '../components/BrandStripe.jsx';
 import Snackbar from '../components/Snackbar.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import { TextField, SelectField } from '../components/Inputs.jsx';
@@ -221,8 +222,9 @@ function LoginScreen({ error, onSubmit }) {
 
   return (
     <div className="flex min-h-full items-center justify-center p-5" style={{ backgroundColor: colors.blue }}>
-      <Card className="w-full max-w-[400px] p-7">
-        <form onSubmit={submit}>
+      <Card className="w-full max-w-[400px]">
+        <BrandStripe height={6} />
+        <form onSubmit={submit} className="p-7">
           <div className="flex flex-col items-center text-center">
             <PolimapLogo size={72} dark />
             <h1 className="m-0 mt-4 text-2xl font-black">Panel de reportes</h1>
@@ -289,6 +291,7 @@ function Header({ loading, onRefresh, onLogout }) {
         <HeaderButton icon={loading ? 'hourglass_top' : 'refresh'} label="Actualizar" onClick={onRefresh} />
         <HeaderButton icon="logout" label="Salir" onClick={onLogout} />
       </div>
+      <BrandStripe height={5} />
     </header>
   );
 }
@@ -352,12 +355,12 @@ function ReportCard({ report, location, onOpen }) {
         {/* Miniatura: la foto o el ícono de la categoría */}
         <div
           className="flex h-[84px] w-[84px] shrink-0 items-center justify-center overflow-hidden"
-          style={{ backgroundColor: colors.blueTint, borderRadius: 16 }}
+          style={{ backgroundColor: category.bg, borderRadius: 16 }}
         >
           {report.foto ? (
             <img src={report.foto} alt="" className="h-full w-full object-cover" loading="lazy" />
           ) : (
-            <Icon name={category.icon} size={34} color={colors.blue} />
+            <Icon name={category.icon} size={34} color={category.fg} />
           )}
         </div>
 
@@ -369,7 +372,7 @@ function ReportCard({ report, location, onOpen }) {
             <StateChip estado={report.estado} />
           </div>
           <div className="mt-1 flex items-center gap-1 text-sm font-bold">
-            <Icon name={category.icon} size={16} color={colors.textSecondary} />
+            <Icon name={category.icon} size={16} color={category.fg} />
             {category.label}
           </div>
           <p

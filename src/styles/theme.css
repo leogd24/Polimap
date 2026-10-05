@@ -1,24 +1,50 @@
-/* Paleta institucional UdeG. Única fuente de color de la app:
-   ningún componente debe declarar colores literales.
-   Migrada de referenciaflutter/core/theme/app_theme.dart */
+/* Paleta Oficial del Politécnico — Escuela Politécnica "Ing. Jorge Matute Remus"
+   Estilo "Noche + colores": barras casi negras y los 5 colores oficiales
+   como acentos (cada pestaña del menú tiene su color).
+   Única fuente de color de la app: ningún componente declara colores literales.
+
+   Colores oficiales:  Verde Matute #2FB344 · Rosa Magenta #E72582 ·
+                       Azul Ciano #00AEEF · Naranja #F6921E · Rojo Central #E5233D
+
+   Legibilidad: sobre el fondo noche, el magenta y el rojo oficiales no llegan
+   a 4.5:1, por eso hay versiones "-light" para texto sobre barras oscuras.
+   Los nombres viejos (blue, crimson, gold) se conservan para no tocar las
+   pantallas: blue = noche, crimson = Rojo Central, gold = Naranja. */
 @theme {
   /* Colores base de la identidad */
-  --color-blue: #002d62; /* AZUL UdeG */
-  --color-crimson: #b32034; /* ROJO CARMESÍ */
-  --color-gold: #daa520; /* ORO UdeG */
+  --color-blue: #14203a; /* NOCHE: barras, títulos y botones oscuros (blanco 16:1) */
+  --color-crimson: #e5233d; /* ROJO CENTRAL (oficial): botón principal (blanco 4.5:1) */
+  --color-gold: #f6921e; /* NARANJA (oficial): acento (sobre noche 7:1) */
 
-  /* Variaciones del azul: superficies, degradados y fondos oscuros */
-  --color-blue-deep: #001b3c;
-  --color-blue-steel: #24486f;
-  --color-blue-light: #0b4a93;
-  --color-blue-tint: #e4ebf5;
+  /* Familia noche: superficies, degradados y fondos oscuros */
+  --color-blue-deep: #0b1424; /* splash y avisos flotantes */
+  --color-blue-steel: #33456b;
+  --color-blue-light: #2a3a5c; /* final del degradado de Inicio (blanco 11:1) */
+  --color-blue-tint: #e8edf5;
 
-  /* Variaciones de los acentos */
-  --color-crimson-dark: #7c1624;
-  --color-crimson-tint: #f9e6e9;
-  --color-gold-deep: #a6791a;
-  --color-gold-dark: #8a6410;
-  --color-gold-tint: #fbf2dd;
+  /* Azul Ciano */
+  --color-cyan: #00aeef; /* AZUL CIANO (oficial) — sobre noche 6.4:1 */
+  --color-cyan-dark: #006a96; /* texto ciano sobre fondos claros */
+  --color-cyan-tint: #e0f4fc;
+
+  /* Rojo y naranja: variaciones */
+  --color-crimson-dark: #b71c30; /* texto rojo sobre fondos claros */
+  --color-crimson-light: #ff6b7a; /* texto rojo sobre noche (5.9:1) */
+  --color-crimson-tint: #fde7ea;
+  --color-gold-deep: #c46f0a;
+  --color-gold-dark: #a35700; /* texto naranja sobre fondos claros */
+  --color-gold-tint: #fef1e2;
+
+  /* Verde Matute */
+  --color-green: #2fb344; /* VERDE MATUTE (oficial) — sobre noche 5.9:1 */
+  --color-green-dark: #1e7a2e; /* con texto blanco (5.4:1) o como texto */
+  --color-green-tint: #e3f6e6;
+
+  /* Rosa Magenta */
+  --color-magenta: #e72582; /* ROSA MAGENTA (oficial) */
+  --color-magenta-dark: #b0155f; /* texto magenta sobre fondos claros */
+  --color-magenta-light: #ff5faa; /* texto magenta sobre noche (5.8:1) */
+  --color-magenta-tint: #fce4f0;
 
   /* Neutros */
   --color-background: #f3f5f9;
