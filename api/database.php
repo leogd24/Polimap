@@ -20,6 +20,7 @@ if (!file_exists(__DIR__ . '/config.php')) {
     exit;
 }
 $CONFIG = require __DIR__ . '/config.php';
+date_default_timezone_set('America/Mexico_City'); // hora de Guadalajara
 
 // 2) Encabezados: siempre respondemos JSON en UTF-8 -----------------------
 header('Content-Type: application/json; charset=utf-8');
@@ -73,6 +74,8 @@ function db(): PDO
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,       // filas como arreglo asociativo
             PDO::ATTR_EMULATE_PREPARES   => false,                  // consultas preparadas reales
         ]);
+        $pdo->exec("SET time_zone = '-06:00'"); // MySQL también en hora de Guadalajara
+        
     } catch (PDOException $e) {
         // No mostramos el detalle al usuario (puede traer la contraseña o la ruta).
         error_log('POLIMAP DB: ' . $e->getMessage());
