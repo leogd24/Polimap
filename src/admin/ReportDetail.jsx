@@ -62,7 +62,7 @@ export default function ReportDetail({ report, token, location, onClose, onSaved
                 {report.folio}
               </div>
               <div className="mt-1 flex items-center gap-1 text-sm font-bold">
-                <Icon name={category.icon} size={18} color={colors.textSecondary} />
+                <Icon name={category.icon} size={18} color={category.fg} />
                 {category.label}
               </div>
             </div>

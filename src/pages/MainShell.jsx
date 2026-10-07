@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { colors, alpha } from '../styles/theme.js';
 import Icon from '../components/Icon.jsx';
 import PolimapLogo from '../components/PolimapLogo.jsx';
+import BrandStripe from '../components/BrandStripe.jsx';
 import HomeScreen from './HomeScreen.jsx';
 import CampusMapScreen from './CampusMapScreen.jsx';
 import BuildingsScreen from './BuildingsScreen.jsx';
@@ -12,12 +13,15 @@ import AssistantScreen from './AssistantScreen.jsx';
 
 const titles = ['Inicio', 'Mapa del campus', 'Edificios', 'Reportar', 'Mi horario'];
 
+// Cada pestaña tiene un color de la Paleta Oficial del Politécnico.
+//   accent: color oficial (fondo de la pastilla cuando está seleccionada)
+//   onDark: versión legible como texto/ícono sobre la barra noche (≥ 4.5:1)
 const destinations = [
-  { icon: 'home', label: 'Inicio' },
-  { icon: 'map', label: 'Mapa' },
-  { icon: 'apartment', label: 'Edificios' },
-  { icon: 'add_alert', label: 'Reportar' },
-  { icon: 'calendar_month', label: 'Horario' },
+  { icon: 'home', label: 'Inicio', accent: colors.cyan, onDark: colors.cyan },
+  { icon: 'map', label: 'Mapa', accent: colors.green, onDark: colors.green },
+  { icon: 'apartment', label: 'Edificios', accent: colors.gold, onDark: colors.gold },
+  { icon: 'add_alert', label: 'Reportar', accent: colors.crimson, onDark: colors.crimsonLight },
+  { icon: 'calendar_month', label: 'Horario', accent: colors.magenta, onDark: colors.magentaLight },
 ];
 
 /// Equivalente de screens/main_shell.dart
@@ -68,6 +72,8 @@ export default function MainShell() {
           <Icon name="chat_bubble" filled={false} color={colors.white} />
         </button>
       </header>
+      {/* Franja con los 5 colores oficiales del Politécnico */}
+      <BrandStripe height={4} />
 
       <main className="relative min-h-0 flex-1">
         {pages.map((page, index) => (
@@ -104,20 +110,20 @@ export default function MainShell() {
                   width: 56,
                   height: 32,
                   borderRadius: 16,
-                  backgroundColor: selected ? colors.gold : 'transparent',
+                  backgroundColor: selected ? destination.accent : 'transparent',
                 }}
               >
                 <Icon
                   name={destination.icon}
                   filled={selected}
-                  color={selected ? colors.blueDeep : alpha(colors.white, 0.75)}
+                  color={selected ? colors.blue : destination.onDark}
                 />
               </span>
               <span
                 className="text-xs"
                 style={{
                   fontWeight: selected ? 800 : 500,
-                  color: selected ? colors.white : alpha(colors.white, 0.75),
+                  color: selected ? colors.white : destination.onDark,
                 }}
               >
                 {destination.label}
