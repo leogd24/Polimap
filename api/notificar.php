@@ -1,8 +1,9 @@
 <?php
 /**
- * POLIMAP — Aviso por correo de reportes nuevos.
+ * POLIMAP — Correos: aviso de reportes nuevos y códigos de acceso.
  *
- * Lo usa api/reportes.php DESPUÉS de guardar el reporte en MySQL.
+ * notificar_reporte() la usa api/reportes.php DESPUÉS de guardar el reporte.
+ * enviar_correo() la usan también los códigos de 6 dígitos de api/auth.php.
  * Regla de oro: el correo solo AVISA. Si Gmail falla, el reporte ya quedó
  * guardado y la app responde normal; el error se anota en el log del servidor.
  *
@@ -34,7 +35,8 @@ const NOMBRES_CATEGORIA = [
  * Manda el aviso de un reporte nuevo.
  *
  * @param array       $reporte  folio, categoria, descripcion, ubicacion (texto ya armado),
- *                              lat, lng, anonimo, creado_en
+ *                              lat, lng, anonimo, autor (null si es anónimo),
+ *                              prioridad, creado_en
  * @param string|null $rutaFoto ruta en disco de la foto (se adjunta) o null
  * @return bool true si Gmail lo aceptó; false si está apagado o falló
  */
@@ -44,11 +46,7 @@ function notificar_reporte(array $reporte, ?string $rutaFoto = null): bool
     $c = $CONFIG['correo'] ?? null;
 
     // 1) ¿Está activado? (en tu compu con XAMPP puede ir apagado)
-    if (!$c || empty($c['activo'])) {
-        return false;
-    }
-    if (empty($c['usuario']) || empty($c['clave_app']) || empty($c['para'])) {
-        error_log('POLIMAP correo: falta usuario, clave_app o destinatarios en config.php');
+    if (!correo_activo() || empty($c['para'])) {
         return false;
     }
 
@@ -64,7 +62,8 @@ function notificar_reporte(array $reporte, ?string $rutaFoto = null): bool
         'Categoría'   => $categoria,
         'Ubicación'   => $reporte['ubicacion'],
         'Descripción' => $reporte['descripcion'],
-        'Anónimo'     => $reporte['anonimo'] ? 'Sí' : 'No',
+        'Prioridad'   => ($reporte['prioridad'] ?? 'media') === 'alta' ? 'ALTA (urgente)' : ucfirst($reporte['prioridad'] ?? 'media'),
+        'Enviado por' => $reporte['anonimo'] ? 'Anónimo' : ($reporte['autor'] ?? 'Sin dato'),
         'Fecha'       => $reporte['creado_en'],
     ];
 
@@ -89,7 +88,37 @@ function notificar_reporte(array $reporte, ?string $rutaFoto = null): bool
     }
     if ($mapa) $texto .= "Mapa: $mapa\n";
 
-    // 3) Enviar por Gmail ---------------------------------------------------
+    // 3) Enviar por Gmail (si falla, nunca rompe el reporte: solo se anota)
+    $urgente = ($reporte['prioridad'] ?? '') === 'alta' ? 'URGENTE · ' : '';
+    return enviar_correo(
+        (array) $c['para'],
+        "[POLIMAP] {$urgente}{$reporte['folio']} · $categoria",
+        $html,
+        $texto,
+        ($rutaFoto && is_file($rutaFoto)) ? $rutaFoto : null,
+        $reporte['folio'] . '.' . pathinfo((string) $rutaFoto, PATHINFO_EXTENSION),
+        'POLIMAP Reportes'
+    );
+}
+
+/**
+ * Envía un correo con la cuenta de Gmail de config.php.
+ * La usan el aviso de reportes (arriba) y los códigos de acceso (auth.php).
+ *
+ * @param string[]    $para          destinatarios
+ * @param string|null $adjunto       ruta en disco de un archivo a adjuntar
+ * @return bool true si Gmail lo aceptó; false si está apagado o falló
+ */
+function enviar_correo(array $para, string $asunto, string $html, string $texto,
+                       ?string $adjunto = null, ?string $nombreAdjunto = null,
+                       string $remitente = 'POLIMAP'): bool
+{
+    global $CONFIG;
+    $c = $CONFIG['correo'] ?? null;
+    if (!correo_activo()) {
+        return false;
+    }
+
     $mail = new PHPMailer(true);   // true = errores como excepciones
     try {
         $mail->isSMTP();
@@ -107,25 +136,39 @@ function notificar_reporte(array $reporte, ?string $rutaFoto = null): bool
         $mail->Timeout    = 10;        // no dejar esperando al usuario más de 10 s
         $mail->CharSet    = 'UTF-8';
 
-        $mail->setFrom($c['usuario'], 'POLIMAP Reportes');
-        foreach ((array) $c['para'] as $destino) {
+        $mail->setFrom($c['usuario'], $remitente);
+        foreach ($para as $destino) {
             $mail->addAddress($destino);
         }
 
-        $mail->Subject = "[POLIMAP] {$reporte['folio']} · $categoria";
+        $mail->Subject = $asunto;
         $mail->isHTML(true);
         $mail->Body    = $html;
         $mail->AltBody = $texto;
 
-        if ($rutaFoto && is_file($rutaFoto)) {
-            $mail->addAttachment($rutaFoto, $reporte['folio'] . '.' . pathinfo($rutaFoto, PATHINFO_EXTENSION));
+        if ($adjunto) {
+            $mail->addAttachment($adjunto, $nombreAdjunto ?: basename($adjunto));
         }
 
         $mail->send();
         return true;
     } catch (MailerException $ex) {
-        // Nunca rompe el reporte: solo se anota.
         error_log('POLIMAP correo: ' . $mail->ErrorInfo);
         return false;
     }
+}
+
+/** ¿Está prendido el correo en config.php y con todos sus datos? */
+function correo_activo(): bool
+{
+    global $CONFIG;
+    $c = $CONFIG['correo'] ?? null;
+    if (!$c || empty($c['activo'])) {
+        return false;   // en tu compu con XAMPP puede ir apagado
+    }
+    if (empty($c['usuario']) || empty($c['clave_app'])) {
+        error_log('POLIMAP correo: falta usuario o clave_app en config.php');
+        return false;
+    }
+    return true;
 }

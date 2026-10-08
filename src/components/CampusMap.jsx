@@ -28,7 +28,7 @@ import Icon from './Icon';
 // ---------------------------------------------------------------------
 // PASO 1. Configuración del campus (valores del proyecto)
 // ---------------------------------------------------------------------
-const CAMPUS = {
+export const CAMPUS = {
   // Centro: justo a la mitad de los 10 edificios (entre el 1 y el 10).
   centro: [20.746992, -103.380341],
   zoomInicial: 18,
@@ -55,7 +55,7 @@ const LIMITES = L.latLngBounds(CAMPUS.limites);
 // Para CORREGIR un edificio: cambia sus números aquí.
 // Para AGREGAR otro punto: añade una línea  numero: [lat, lng],
 // usando un `number` que exista en campusBuildings.js.
-const COORDENADAS_EDIFICIOS = {
+export const COORDENADAS_EDIFICIOS = {
   1: [20.746027, -103.380432],
   2: [20.746266, -103.380405],
   3: [20.746459, -103.380354],

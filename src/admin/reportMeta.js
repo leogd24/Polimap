@@ -52,3 +52,99 @@ export function locationText(report, buildingNames) {
   }
   return report.zona || 'Sin ubicación';
 }
+
+// ---------------------------------------------------------------------------
+// Panel v2: prioridad, tiempos, filtros y exportar
+// ---------------------------------------------------------------------------
+
+/** Prioridades. Fuga y riesgo entran solas en "alta" (lo decide la API). */
+export const PRIORITIES = [
+  { key: 'alta', label: 'Urgente', icon: 'priority_high', bg: colors.crimsonTint, fg: colors.crimsonDark },
+  { key: 'media', label: 'Media', icon: 'drag_handle', bg: colors.goldTint, fg: colors.goldDark },
+  { key: 'baja', label: 'Baja', icon: 'south', bg: colors.blueTint, fg: colors.textSecondary },
+];
+
+export function priorityInfo(key) {
+  return PRIORITIES.find((p) => p.key === key) ?? PRIORITIES[1];
+}
+
+/** "hace 5 min", "hace 3 h", "hace 2 d" para las tarjetas. */
+export function timeAgo(iso) {
+  if (!iso) return '';
+  const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (Number.isNaN(minutes)) return '';
+  if (minutes < 1) return 'justo ahora';
+  if (minutes < 60) return `hace ${minutes} min`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `hace ${hours} h`;
+  return `hace ${Math.round(hours / 24)} d`;
+}
+
+/** Duración legible: 0.25 d → "6 h", 1.8 d → "1.8 d". */
+export function formatDuration(days) {
+  if (days == null || Number.isNaN(days)) return '—';
+  if (days < 1) return `${Math.max(1, Math.round(days * 24))} h`;
+  return `${days.toFixed(1)} d`;
+}
+
+/** Días entre creado y resuelto (null si no está resuelto). */
+export function resolutionDays(report) {
+  if (!report.resolvedAt) return null;
+  return (new Date(report.resolvedAt) - new Date(report.createdAt)) / 86400000;
+}
+
+/** Filtros vacíos (el tablero, el mapa y las estadísticas usan los mismos). */
+export const EMPTY_FILTERS = {
+  search: '',
+  categoria: null,
+  edificio: null,
+  prioridad: null,
+  desde: '',
+  hasta: '',
+};
+
+/** Aplica los filtros a la lista de reportes. */
+export function applyFilters(reports, filters, buildingNames) {
+  const text = filters.search.trim().toLowerCase();
+  return reports.filter((r) => {
+    if (filters.categoria && r.categoria !== filters.categoria) return false;
+    if (filters.prioridad && r.prioridad !== filters.prioridad) return false;
+    if (filters.edificio) {
+      if (filters.edificio === 'zona' ? r.edificioNumber : String(r.edificioNumber) !== filters.edificio) return false;
+    }
+    const day = (r.createdAt || '').slice(0, 10);
+    if (filters.desde && day < filters.desde) return false;
+    if (filters.hasta && day > filters.hasta) return false;
+    if (!text) return true;
+    return [r.folio, r.descripcion, r.zona, r.comentarioAdmin, r.autor?.nombre, r.autor?.correo, locationText(r, buildingNames)]
+      .filter(Boolean)
+      .some((value) => value.toLowerCase().includes(text));
+  });
+}
+
+export function activeFilterCount(filters) {
+  return Object.entries(filters).filter(([, v]) => v).length;
+}
+
+/** Fecha local de hoy "AAAA-MM-DD" (no la de Londres, como toISOString). */
+export function localDay(date = new Date()) {
+  return date.toLocaleDateString('en-CA');
+}
+
+/** Texto e ícono de una línea del historial: { accion, antes, despues }. */
+export function historyInfo(h) {
+  switch (h.accion) {
+    case 'creado':
+      return { icon: 'add_circle', text: 'Envió el reporte' };
+    case 'estado':
+      return { icon: 'swap_horiz', text: `Cambió el estado: ${stateInfo(h.antes).label} → ${stateInfo(h.despues).label}` };
+    case 'prioridad':
+      return { icon: 'flag', text: `Cambió la prioridad: ${priorityInfo(h.antes).label} → ${priorityInfo(h.despues).label}` };
+    case 'comentario':
+      return { icon: 'chat', text: h.despues ? `Comentó: “${h.despues}”` : 'Borró el comentario' };
+    case 'apoyo':
+      return { icon: 'group_add', text: 'Un alumno se sumó: “a mí también me pasa”' };
+    default:
+      return { icon: 'history', text: h.accion };
+  }
+}

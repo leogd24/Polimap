@@ -9,3 +9,7 @@ api/config.php
 # Fotos que suben los usuarios (se guarda solo la regla de seguridad)
 api/uploads/*
 !api/uploads/.htaccess
+
+# Certificados de Google descargados por la API (se regeneran solos)
+api/cache/*
+!api/cache/.htaccess

@@ -91,6 +91,83 @@ CREATE TABLE faq (
 ) ENGINE=InnoDB;
 
 -- ---------------------------------------------------------------------
+-- 4a) USUARIOS: quien entra con su cuenta de Google de la UdG.
+--     Se crea solo la primera vez que alguien inicia sesión (api/auth.php).
+--     También se crea al entrar con código por correo o con contraseña.
+--     Los permisos NO se guardan aquí: se calculan con el correo
+--     (@alumnos.udg.mx, @academicos.udg.mx) y la tabla "accesos".
+-- ---------------------------------------------------------------------
+CREATE TABLE usuarios (
+  id            INT UNSIGNED  NOT NULL AUTO_INCREMENT,
+  correo        VARCHAR(190)  NOT NULL,
+  nombre        VARCHAR(120)  NOT NULL DEFAULT '',
+  foto          VARCHAR(500)  NULL,                  -- foto de perfil de Google
+  google_sub    VARCHAR(64)   NULL,                  -- id único de la cuenta de Google
+  creado_en     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  ultimo_acceso DATETIME      NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_usuarios_correo (correo),
+  UNIQUE KEY uq_usuarios_sub (google_sub)
+) ENGINE=InnoDB;
+
+-- 4b) SESIONES: una fila por dispositivo con sesión abierta.
+--     Se guarda el HASH del token (nunca el token): si alguien ve la base,
+--     no puede usar las sesiones.
+CREATE TABLE sesiones (
+  token_hash  CHAR(64)     NOT NULL,                 -- sha256 del token de la cookie
+  usuario_id  INT UNSIGNED NOT NULL,
+  creado_en   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expira_en   DATETIME     NOT NULL,
+  PRIMARY KEY (token_hash),
+  KEY idx_sesiones_expira (expira_en),
+  CONSTRAINT fk_sesiones_usuario FOREIGN KEY (usuario_id)
+    REFERENCES usuarios(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- 4c) ACCESOS: correos DESIGNADOS a mano (no se pueden registrar solos).
+--     rol 'maestro' → cuenta maestra del equipo (pruebas y exposición).
+--                     Puede ser de cualquier dominio. Maneja esta lista desde
+--                     el panel. Solo se agrega o quita aquí, con SQL.
+--     rol 'admin'   → profesor (@academicos.udg.mx) que puede usar el panel.
+--     rol 'prueba'  → correo de cualquier dominio que puede reportar en la app
+--                     como si fuera alumno (evaluadores, pruebas del equipo).
+--     clave_hash    → contraseña del panel. NUNCA se escribe a mano: cada
+--                     quien la crea desde admin.html → "Crear o recuperar
+--                     contraseña" con un código que le llega a su correo.
+CREATE TABLE accesos (
+  id                INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  correo            VARCHAR(190) NOT NULL,
+  rol               ENUM('maestro','admin','prueba') NOT NULL,
+  nota              VARCHAR(120) NOT NULL DEFAULT '',     -- ej. "Mtra. de Redes", "Evaluador"
+  clave_hash        VARCHAR(255) NULL,                    -- password_hash() de PHP (bcrypt)
+  intentos_fallidos TINYINT UNSIGNED NOT NULL DEFAULT 0,  -- contraseña mal escrita seguida
+  bloqueado_hasta   DATETIME     NULL,                    -- 5 fallos = 15 min sin poder entrar
+  agregado_por      VARCHAR(190) NOT NULL DEFAULT '',
+  creado_en         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_accesos_correo (correo)
+) ENGINE=InnoDB;
+
+-- 4d) CÓDIGOS DE ACCESO: los 6 dígitos que se mandan por correo.
+--     proposito 'entrar' → alumno que entra sin el botón de Google.
+--     proposito 'clave'  → admin que crea o recupera su contraseña.
+--     Se guarda el HASH del código, dura 10 minutos y aguanta 5 intentos.
+CREATE TABLE codigos_acceso (
+  id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  correo     VARCHAR(190) NOT NULL,
+  proposito  ENUM('entrar','clave') NOT NULL,
+  codigo_hash CHAR(64)    NOT NULL,
+  intentos   TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  ip         VARCHAR(45)  NOT NULL DEFAULT '',
+  creado_en  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expira_en  DATETIME     NOT NULL,
+  usado_en   DATETIME     NULL,
+  PRIMARY KEY (id),
+  KEY idx_codigos_correo (correo, proposito),
+  KEY idx_codigos_creado (creado_en)
+) ENGINE=InnoDB;
+
+-- ---------------------------------------------------------------------
 -- 4) REPORTES comunitarios (Katia). El folio lo genera la API al guardar.
 --    Debe tener edificio_number o zona (lo valida api/reportes.php).
 -- ---------------------------------------------------------------------
@@ -108,17 +185,55 @@ CREATE TABLE reportes (
   anonimo          TINYINT(1)       NOT NULL DEFAULT 1,
   estado           ENUM('recibido','revision','proceso','resuelto') NOT NULL DEFAULT 'recibido',
   comentario_admin VARCHAR(500)     NULL,
+  prioridad        ENUM('baja','media','alta') NOT NULL DEFAULT 'media',  -- fuga y riesgo entran en 'alta'
+  usuario_id       INT UNSIGNED     NULL,                -- quién lo envió (sesión de Google)
   creado_en        DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
   actualizado_en   DATETIME         NULL ON UPDATE CURRENT_TIMESTAMP,
+  resuelto_en      DATETIME         NULL,                -- para el tiempo promedio de solución
   PRIMARY KEY (id),
   UNIQUE KEY uq_reportes_folio (folio),
   KEY idx_reportes_estado (estado),
+  KEY idx_reportes_usuario (usuario_id),
   CONSTRAINT fk_reportes_edificio FOREIGN KEY (edificio_number)
-    REFERENCES edificios(number) ON DELETE SET NULL ON UPDATE CASCADE
+    REFERENCES edificios(number) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT fk_reportes_usuario FOREIGN KEY (usuario_id)
+    REFERENCES usuarios(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+-- 4e) HISTORIAL: cada cambio que hace un administrador (y la creación).
+CREATE TABLE reportes_historial (
+  id             INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  reporte_id     INT UNSIGNED NOT NULL,
+  usuario_id     INT UNSIGNED NULL,                  -- quién hizo el cambio
+  accion         ENUM('creado','estado','prioridad','comentario','apoyo') NOT NULL,
+  valor_anterior VARCHAR(500) NULL,
+  valor_nuevo    VARCHAR(500) NULL,
+  creado_en      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_historial_reporte (reporte_id),
+  CONSTRAINT fk_historial_reporte FOREIGN KEY (reporte_id)
+    REFERENCES reportes(id) ON DELETE CASCADE,
+  CONSTRAINT fk_historial_usuario FOREIGN KEY (usuario_id)
+    REFERENCES usuarios(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+-- 4g) APOYOS ("A mí también me pasa"): un alumno se suma a un reporte que
+--     ya existe en vez de repetirlo. Uno por alumno y por reporte.
+--     Con 5 apoyos el reporte sube solo a prioridad alta (api/reportes.php).
+CREATE TABLE reportes_apoyos (
+  reporte_id INT UNSIGNED NOT NULL,
+  usuario_id INT UNSIGNED NOT NULL,
+  creado_en  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (reporte_id, usuario_id),
+  KEY idx_apoyos_usuario (usuario_id),
+  CONSTRAINT fk_apoyos_reporte FOREIGN KEY (reporte_id)
+    REFERENCES reportes(id) ON DELETE CASCADE,
+  CONSTRAINT fk_apoyos_usuario FOREIGN KEY (usuario_id)
+    REFERENCES usuarios(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- ---------------------------------------------------------------------
--- 5) AVISOS (Leo) y 6) USUARIOS ADMIN (panel de reportes, Avance 2)
+-- 5) AVISOS (Leo). Se crean y editan desde el panel de administración.
 -- ---------------------------------------------------------------------
 CREATE TABLE avisos (
   id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -130,14 +245,7 @@ CREATE TABLE avisos (
   PRIMARY KEY (id)
 ) ENGINE=InnoDB;
 
-CREATE TABLE usuarios_admin (
-  id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  usuario       VARCHAR(50)  NOT NULL,
-  password_hash VARCHAR(255) NOT NULL,   -- se genera con password_hash() de PHP
-  nombre        VARCHAR(100) NOT NULL DEFAULT '',
-  PRIMARY KEY (id),
-  UNIQUE KEY uq_usuario (usuario)
-) ENGINE=InnoDB;
+-- (La tabla usuarios_admin se quitó: ahora el panel usa la tabla accesos.)
 
 -- =====================================================================
 -- DATOS INICIALES (copiados de src/data/)
@@ -213,3 +321,12 @@ INSERT INTO faq (pregunta, respuesta, palabras_clave, categoria, edificio_number
 -- Aviso de ejemplo para que Leo pueda probar (bórralo cuando haya reales).
 INSERT INTO avisos (titulo, contenido, tipo, fecha_inicio, fecha_fin) VALUES
   ('Bienvenido a POLIMAP', 'Esta es una versión de prueba. Tu campus en la palma de tu mano.', 'general', '2026-09-01', '2026-12-31');
+
+-- ---------------------------------------------------------------------
+-- CUENTA MAESTRA (pruebas y exposición). Va SIN contraseña: la primera vez
+-- entra a admin.html → "Crear o recuperar contraseña" y le llega un código
+-- a este correo. Para agregar profesores, usa el panel (sección Accesos) o:
+--   INSERT INTO accesos (correo, rol, nota) VALUES ('nombre@academicos.udg.mx', 'admin', 'Mtra. de Redes');
+-- ---------------------------------------------------------------------
+INSERT INTO accesos (correo, rol, nota, agregado_por) VALUES
+  ('polimap505@gmail.com', 'maestro', 'Cuenta maestra del equipo (pruebas y exposición)', 'sql');

@@ -1,0 +1,104 @@
+# .github/workflows/publicar-infinityfree.yml — Responsable: Alexis
+#
+# Publica POLIMAP en InfinityFree (https://polimap.ct.ws) SOLO cuando algo
+# entra a la rama main (al hacer Merge de un Pull Request). También se puede
+# lanzar a mano: GitHub → Actions → "Publicar en InfinityFree" → Run workflow.
+#
+# Paso a paso:
+#   1. Descarga el repo e instala las dependencias (npm ci).
+#   2. Revisa que todos los .php no tengan errores de escritura.
+#   3. Construye la app (npm run build → carpeta dist/).
+#   4. Sube por FTP el CONTENIDO de dist/ a htdocs/.
+#   5. Sube la carpeta api/ a htdocs/api/.
+#
+# Lo que NUNCA sube (se queda como está en el servidor):
+#   - api/config.php        → contraseñas del servidor
+#   - api/uploads/          → fotos de los reportes
+#   - api/cache/ (salvo su .htaccess) → certificados de Google
+#
+# La primera vez solo agrega y reemplaza archivos. De ahí en adelante sube
+# únicamente lo que cambió y borra lo que ya no existe (por ejemplo, los
+# assets viejos), usando un archivo de estado que guarda en el servidor.
+#
+# Necesita 3 secretos del repositorio (Settings → Secrets and variables → Actions):
+#   FTP_SERVER    ftpupload.net
+#   FTP_USERNAME  el usuario FTP de InfinityFree (if0_…)
+#   FTP_PASSWORD  la contraseña de la cuenta de hosting (vPanel)
+# Ver docs/publicar-automatico.md.
+
+name: Publicar en InfinityFree
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Si se unen dos PR seguidos, la segunda publicación espera a la primera.
+concurrency:
+  group: publicar-infinityfree
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Instalar Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Revisar que los PHP no tengan errores
+        run: |
+          for f in api/*.php; do php -l "$f"; done
+
+      - name: Construir la app (dist/)
+        run: npm run build
+
+      - name: Subir la app a htdocs/
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftp
+          port: 21
+          local-dir: ./dist/
+          server-dir: /htdocs/
+          state-name: .polimap-estado-app.json
+          timeout: 120000
+          exclude: |
+            **/.git*
+            **/.git*/**
+
+      - name: Subir la API a htdocs/api/ (sin config.php ni fotos)
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftp
+          port: 21
+          local-dir: ./api/
+          server-dir: /htdocs/api/
+          state-name: .polimap-estado-api.json
+          timeout: 120000
+          exclude: |
+            **/.git*
+            **/.git*/**
+            config.php
+            uploads/**
+            cache/google-certs.json
+
+      - name: Resumen
+        run: |
+          echo "### POLIMAP publicado en https://polimap.ct.ws" >> "$GITHUB_STEP_SUMMARY"
+          echo "Commit: ${GITHUB_SHA::7}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Recuerda: los cambios de base de datos (sql/migracion-*.sql) se importan a mano en phpMyAdmin." >> "$GITHUB_STEP_SUMMARY"

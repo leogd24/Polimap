@@ -1,0 +1,134 @@
+<!doctype html>
+<!--
+  public/privacidad.html — Responsable: Alexis
+  Aviso de privacidad de POLIMAP. Es una página fija (no usa React):
+  Vite la copia tal cual a dist/ y queda en https://polimap.ct.ws/privacidad.html
+  Google la pide para publicar el inicio de sesión con Google.
+  Colores: los de la Paleta Oficial del Politécnico (src/styles/theme.css).
+-->
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aviso de privacidad · POLIMAP</title>
+    <meta name="theme-color" content="#14203A" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <style>
+      :root {
+        --noche: #14203a;
+        --fondo: #f3f5f9;
+        --texto: #14203a;
+        --gris: #5d6980;
+        --borde: #dce3ed;
+        --ciano: #006a96;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--fondo);
+        color: var(--texto);
+        font: 16px/1.6 Roboto, system-ui, -apple-system, 'Segoe UI', sans-serif;
+      }
+      header { background: var(--noche); color: #fff; padding: 20px 16px; }
+      header .caja { max-width: 760px; margin: 0 auto; display: flex; align-items: center; gap: 14px; }
+      header img { width: 48px; height: 48px; border-radius: 14px; }
+      header h1 { margin: 0; font-size: 20px; }
+      header p { margin: 0; font-size: 13px; opacity: 0.8; }
+      .franja { display: flex; height: 5px; }
+      .franja i { flex: 1; }
+      main { max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; }
+      section { background: #fff; border: 1px solid var(--borde); border-radius: 18px; padding: 20px; margin-bottom: 16px; }
+      h2 { margin: 0 0 8px; font-size: 18px; }
+      ul { margin: 8px 0 0; padding-left: 20px; }
+      li { margin-bottom: 4px; }
+      .gris { color: var(--gris); font-size: 14px; }
+      a { color: var(--ciano); font-weight: 700; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="caja">
+        <img src="/img/logo-polimap.png" alt="POLIMAP" />
+        <div>
+          <h1>Aviso de privacidad de POLIMAP</h1>
+          <p>Escuela Politécnica "Ing. Jorge Matute Remus" · Universidad de Guadalajara</p>
+        </div>
+      </div>
+    </header>
+    <div class="franja" aria-hidden="true">
+      <i style="background: #2fb344"></i><i style="background: #e72582"></i><i style="background: #00aeef"></i
+      ><i style="background: #f6921e"></i><i style="background: #e5233d"></i>
+    </div>
+
+    <main>
+      <p class="gris">Última actualización: 8 de octubre de 2026</p>
+
+      <section>
+        <h2>¿Qué es POLIMAP?</h2>
+        <p>
+          POLIMAP es una aplicación web hecha por estudiantes como proyecto escolar para orientarse dentro de la
+          Escuela Politécnica: mapa del campus, edificios, horarios, asistente de preguntas frecuentes y reportes de
+          incidencias (basura, baños, iluminación, etc.).
+        </p>
+      </section>
+
+      <section>
+        <h2>Qué datos usamos</h2>
+        <ul>
+          <li><b>Sin iniciar sesión (invitado):</b> no pedimos ningún dato personal.</li>
+          <li>
+            <b>Al iniciar sesión</b> (con Google o con un código enviado a tu correo): tu <b>nombre</b>, tu
+            <b>correo institucional</b> y, si entras con Google, tu <b>foto de perfil</b>. No recibimos ni guardamos
+            tu contraseña de Google.
+          </li>
+          <li>
+            <b>Al enviar un reporte:</b> la categoría, la ubicación (edificio o zona), la descripción, la foto si la
+            agregas y, si lo permites, la ubicación GPS del celular.
+          </li>
+          <li>
+            <b>Para mantener tu sesión</b> usamos una cookie técnica. No usamos cookies de publicidad ni de
+            seguimiento.
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Para qué los usamos</h2>
+        <ul>
+          <li>Confirmar que eres alumno del plantel (correo @alumnos.udg.mx) antes de dejarte reportar.</li>
+          <li>Mostrarte el seguimiento de tus reportes ("Mis reportes").</li>
+          <li>Que el equipo que atiende las incidencias del plantel pueda revisarlas y resolverlas.</li>
+        </ul>
+        <p>
+          Si envías un reporte como <b>anónimo</b>, el equipo que lo atiende no ve tu nombre ni tu correo.
+          <b>No vendemos ni compartimos tus datos</b> con terceros ni los usamos para publicidad.
+        </p>
+      </section>
+
+      <section>
+        <h2>Dónde se guardan</h2>
+        <p>
+          En la base de datos del proyecto, alojada en el servicio de hospedaje InfinityFree. Solo los
+          administradores designados del plantel pueden ver los reportes, y entran con su propia cuenta.
+        </p>
+      </section>
+
+      <section>
+        <h2>Tus derechos</h2>
+        <p>
+          Puedes pedir ver, corregir o borrar tus datos y tus reportes escribiendo a
+          <a href="mailto:polimap505@gmail.com">polimap505@gmail.com</a>. También puedes cerrar sesión en cualquier
+          momento desde tu foto de perfil en la app.
+        </p>
+      </section>
+
+      <section>
+        <h2>Contacto</h2>
+        <p>
+          Equipo POLIMAP · <a href="mailto:polimap505@gmail.com">polimap505@gmail.com</a><br />
+          <a href="/">Volver a POLIMAP</a>
+        </p>
+      </section>
+    </main>
+  </body>
+</html>
