@@ -205,7 +205,7 @@ CREATE TABLE reportes_historial (
   id             INT UNSIGNED NOT NULL AUTO_INCREMENT,
   reporte_id     INT UNSIGNED NOT NULL,
   usuario_id     INT UNSIGNED NULL,                  -- quién hizo el cambio
-  accion         ENUM('creado','estado','prioridad','comentario') NOT NULL,
+  accion         ENUM('creado','estado','prioridad','comentario','apoyo') NOT NULL,
   valor_anterior VARCHAR(500) NULL,
   valor_nuevo    VARCHAR(500) NULL,
   creado_en      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -215,6 +215,21 @@ CREATE TABLE reportes_historial (
     REFERENCES reportes(id) ON DELETE CASCADE,
   CONSTRAINT fk_historial_usuario FOREIGN KEY (usuario_id)
     REFERENCES usuarios(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+-- 4g) APOYOS ("A mí también me pasa"): un alumno se suma a un reporte que
+--     ya existe en vez de repetirlo. Uno por alumno y por reporte.
+--     Con 5 apoyos el reporte sube solo a prioridad alta (api/reportes.php).
+CREATE TABLE reportes_apoyos (
+  reporte_id INT UNSIGNED NOT NULL,
+  usuario_id INT UNSIGNED NOT NULL,
+  creado_en  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (reporte_id, usuario_id),
+  KEY idx_apoyos_usuario (usuario_id),
+  CONSTRAINT fk_apoyos_reporte FOREIGN KEY (reporte_id)
+    REFERENCES reportes(id) ON DELETE CASCADE,
+  CONSTRAINT fk_apoyos_usuario FOREIGN KEY (usuario_id)
+    REFERENCES usuarios(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- ---------------------------------------------------------------------

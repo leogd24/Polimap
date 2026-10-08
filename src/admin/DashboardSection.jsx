@@ -20,11 +20,11 @@ import KanbanBoard from './KanbanBoard.jsx';
 import ReportCard from './ReportCard.jsx';
 import CampusHeatCard from './CampusHeatCard.jsx';
 import { OutlineButton, FilterFields } from './ui.jsx';
+import { downloadExcel } from './excelExport.js';
 import {
   CATEGORIES,
   applyFilters,
   activeFilterCount,
-  downloadCsv,
   locationText,
   resolutionDays,
   formatDuration,
@@ -63,6 +63,7 @@ export default function DashboardSection({
   lastUpdate,
   onRefresh,
   onGoTo,
+  user,
 }) {
   const [view, setView] = useState('kanban'); // 'kanban' | 'lista'
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -110,8 +111,13 @@ export default function DashboardSection({
         </OutlineButton>
         <button
           type="button"
-          onClick={() => downloadCsv(visible, buildingNames)}
-          title="Descarga lo que ves con los filtros (se abre en Excel)"
+          onClick={() =>
+            downloadExcel(visible, buildingNames, {
+              filtros: describeFilters(filters, buildingNames),
+              autor: user?.correo,
+            })
+          }
+          title="Descarga un Excel con resumen, gráficas y la lista de reportes (respeta los filtros)"
           className="tappable flex min-h-[48px] items-center gap-2 border-0 px-5 text-sm font-extrabold"
           style={{ backgroundColor: colors.blue, color: colors.white, borderRadius: 'var(--radius-button)' }}
         >
@@ -403,4 +409,21 @@ function computeKpis(reports) {
       .length,
     promedio: days.length ? days.reduce((a, b) => a + b, 0) / days.length : null,
   };
+}
+
+/** Texto de los filtros activos para el encabezado del Excel: "Edificio 3 · Urgente". */
+function describeFilters(f, buildingNames) {
+  const partes = [];
+  if (f.search?.trim()) partes.push(`búsqueda "${f.search.trim()}"`);
+  if (f.categoria) partes.push(CATEGORIES[f.categoria]?.label ?? f.categoria);
+  if (f.edificio)
+    partes.push(
+      f.edificio === 'zona'
+        ? 'zonas abiertas'
+        : `Edificio ${f.edificio}${buildingNames[f.edificio] && buildingNames[f.edificio] !== `Edificio ${f.edificio}` ? ` (${buildingNames[f.edificio]})` : ''}`,
+    );
+  if (f.prioridad) partes.push(`prioridad ${f.prioridad === 'alta' ? 'urgente' : f.prioridad}`);
+  if (f.desde) partes.push(`desde ${f.desde}`);
+  if (f.hasta) partes.push(`hasta ${f.hasta}`);
+  return partes.join(' · ');
 }

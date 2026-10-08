@@ -112,13 +112,19 @@ export default function MapSection({ reports, buildings, buildingNames, filters,
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         {/* Quita el cuadro blanco que Leaflet pone a los íconos HTML */}
         <style>{'.pm-admin-pin{background:transparent;border:0}'}</style>
-        <Card className="relative">
+        {/* isolate: Leaflet usa z-index altos (400–1000); así el mapa queda
+            DEBAJO del menú lateral y de la barra de arriba en el celular. */}
+        <Card className="relative isolate">
           <div style={{ height: 'min(70vh, 620px)' }}>
             <MapContainer
               center={CAMPUS.centro}
               zoom={CAMPUS.zoomInicial}
-              minZoom={17}
+              // Mismo límite que el mapa de Marcos (CampusMap.jsx): solo el Poli.
+              minZoom={CAMPUS.zoomMin}
               maxZoom={CAMPUS.zoomMax}
+              maxBounds={CAMPUS.limites}
+              maxBoundsViscosity={0.85}
+              bounceAtZoomLimits
               style={{ height: '100%', width: '100%' }}
               scrollWheelZoom
             >

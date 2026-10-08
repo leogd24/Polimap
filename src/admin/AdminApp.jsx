@@ -330,6 +330,7 @@ function Panel({ user, onLogout }) {
             lastUpdate={lastUpdate}
             onRefresh={() => loadReports()}
             onGoTo={go}
+            user={user}
           />
         )}
         {current === 'mapa' && (

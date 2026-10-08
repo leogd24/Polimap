@@ -305,6 +305,33 @@ export async function getReports() {
 }
 
 // -----------------------------------------------------------------------
+// "A mí también me pasa" (Reportar)
+// -----------------------------------------------------------------------
+
+/**
+ * Reportes SIN resolver del mismo lugar y categoría (últimos 30 días).
+ * lugar: 'Edificio 3' o el nombre de la zona ('Explanada').
+ * Regresa [{ folio, descripcion, foto, estado, createdAt, apoyos, yaApoyo, esMio }].
+ * Sin conexión regresa [] (el alumno sigue reportando normal).
+ */
+export async function getSimilarReports(categoria, lugar) {
+  const params = new URLSearchParams({ similares: '1', categoria });
+  if (lugar.startsWith('Edificio ')) params.set('edificio_number', lugar.replace('Edificio ', ''));
+  else params.set('zona', lugar);
+  try {
+    return await request(`reportes.php?${params}`);
+  } catch (error) {
+    console.warn('[api] getSimilarReports:', error.message);
+    return [];
+  }
+}
+
+/** Se suma a un reporte existente. Regresa { folio, apoyos, prioridad, yaEstaba }. */
+export async function supportReport(folio) {
+  return sendJson('reportes.php?accion=apoyar', { folio });
+}
+
+// -----------------------------------------------------------------------
 // Panel de administración (admin.html)
 // Estas funciones NO tienen respaldo local: si la API falla, lanzan el error
 // para que el panel lo muestre. Necesitan sesión de un profesor autorizado

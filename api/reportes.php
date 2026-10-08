@@ -12,6 +12,12 @@
  *   PATCH /api/reportes.php                 → cambia estado / prioridad / comentario (admin)
  *         (se manda como POST ?_method=PATCH)
  *
+ *   "A mí también me pasa" (alumno con sesión):
+ *   GET   /api/reportes.php?similares=1&categoria=banos&edificio_number=3   (o &zona=Explanada)
+ *         → hasta 5 reportes SIN resolver del mismo lugar y categoría (últimos 30 días)
+ *   POST  /api/reportes.php?accion=apoyar   { "folio": "POLI-2026-0001" }
+ *         → se suma a ese reporte en vez de repetirlo. Con 5 apoyos sube a urgente.
+ *
  * Al crear un reporte, además de guardarlo, manda un aviso por correo
  * (api/notificar.php). Si el correo falla, el reporte igual queda guardado.
  *
@@ -25,14 +31,19 @@ const CATEGORIAS = ['basura', 'mobiliario', 'banos', 'fuga', 'iluminacion', 'rie
 const ESTADOS    = ['recibido', 'revision', 'proceso', 'resuelto'];
 const PRIORIDADES = ['baja', 'media', 'alta'];
 // Estas categorías entran solas como "urgentes" (prioridad alta).
+const APOYOS_PARA_URGENTE = 5;   // con este número de apoyos, el reporte sube a prioridad alta
 const CATEGORIAS_URGENTES = ['fuga', 'riesgo'];
 
 // metodo_http() (database.php) convierte POST ?_method=PATCH en PATCH,
 // porque algunos hostings gratuitos bloquean PATCH.
 switch (metodo_http()) {
-    case 'POST':  crear_reporte();   break;
+    case 'POST':
+        if (($_GET['accion'] ?? '') === 'apoyar') apoyar_reporte();
+        else crear_reporte();
+        break;
     case 'GET':
         if (isset($_GET['historial'])) listar_historial();
+        elseif (isset($_GET['similares'])) listar_similares();
         else listar_reportes();
         break;
     case 'PATCH': cambiar_reporte(); break;
@@ -196,8 +207,9 @@ function listar_reportes(): void
     $pdo = db();
     $sql = 'SELECT r.id, r.folio, r.categoria, r.edificio_number, r.zona, r.descripcion, r.foto,
                    r.lat, r.lng, r.anonimo, r.estado, r.prioridad, r.comentario_admin,
-                   r.creado_en, r.actualizado_en, r.resuelto_en,
-                   u.nombre AS autor_nombre, u.correo AS autor_correo
+                   r.creado_en, r.actualizado_en, r.resuelto_en, r.usuario_id,
+                   u.nombre AS autor_nombre, u.correo AS autor_correo,
+                   (SELECT COUNT(*) FROM reportes_apoyos a WHERE a.reporte_id = r.id) AS apoyos
               FROM reportes r LEFT JOIN usuarios u ON u.id = r.usuario_id';
 
     if (!empty($_GET['todos'])) {
@@ -206,10 +218,17 @@ function listar_reportes(): void
         responder(array_map(fn ($r) => reporte_json($r, true), $filas));
     }
 
+    // "Mis reportes": los que envié y los que apoyé ("A mí también me pasa").
     $usuario = exigir_app();
-    $stmt = $pdo->prepare("$sql WHERE r.usuario_id = ? ORDER BY r.id DESC");
-    $stmt->execute([$usuario['id']]);
-    responder(array_map(fn ($r) => reporte_json($r, false), $stmt->fetchAll()));
+    $stmt = $pdo->prepare(
+        "$sql WHERE r.usuario_id = ?
+                 OR r.id IN (SELECT reporte_id FROM reportes_apoyos WHERE usuario_id = ?)
+              ORDER BY r.id DESC"
+    );
+    $stmt->execute([$usuario['id'], $usuario['id']]);
+    responder(array_map(fn ($r) => reporte_json($r, false) + [
+        'esMio' => (int) $r['usuario_id'] === $usuario['id'],   // false = lo apoyé
+    ], $stmt->fetchAll()));
 }
 
 /** Fila de la BD → JSON del contrato. El autor solo lo ve el admin y solo si NO es anónimo. */
@@ -232,6 +251,7 @@ function reporte_json(array $r, bool $paraAdmin): array
         'createdAt'       => iso($r['creado_en']),
         'updatedAt'       => iso($r['actualizado_en']),
         'resolvedAt'      => iso($r['resuelto_en']),
+        'apoyos'          => (int) ($r['apoyos'] ?? 0),   // alumnos que se sumaron
     ];
     if ($paraAdmin) {
         $json['autor'] = (!$r['anonimo'] && $r['autor_correo'])
@@ -239,6 +259,104 @@ function reporte_json(array $r, bool $paraAdmin): array
             : null;
     }
     return $json;
+}
+
+// =======================================================================
+// "A mí también me pasa"
+// =======================================================================
+
+/**
+ * GET ?similares=1&categoria=…&edificio_number=… (o &zona=…)
+ * Reportes SIN resolver del mismo lugar y categoría de los últimos 30 días,
+ * para que el alumno se sume en vez de repetirlo. No incluye datos del autor.
+ */
+function listar_similares(): void
+{
+    global $CONFIG;
+    $usuario   = exigir_app();
+    $categoria = (string) ($_GET['categoria'] ?? '');
+    $edificio  = ($_GET['edificio_number'] ?? '') === '' ? null : filter_var($_GET['edificio_number'], FILTER_VALIDATE_INT);
+    $zona      = trim((string) ($_GET['zona'] ?? '')) ?: null;
+
+    if (!in_array($categoria, CATEGORIAS, true)) error_json('Categoría no válida');
+    if ($edificio === false) error_json('Edificio no válido');
+    if ($edificio === null && $zona === null) error_json('Indica el edificio o la zona');
+
+    $lugar  = $edificio !== null ? 'r.edificio_number = ?' : 'r.edificio_number IS NULL AND r.zona = ?';
+    $stmt = db()->prepare(
+        "SELECT r.id, r.folio, r.categoria, r.edificio_number, r.zona, r.descripcion, r.foto,
+                r.estado, r.prioridad, r.creado_en, r.usuario_id,
+                (SELECT COUNT(*) FROM reportes_apoyos a WHERE a.reporte_id = r.id) AS apoyos,
+                (SELECT COUNT(*) FROM reportes_apoyos a WHERE a.reporte_id = r.id AND a.usuario_id = ?) AS ya_apoyo
+           FROM reportes r
+          WHERE r.estado <> 'resuelto' AND r.categoria = ? AND $lugar AND r.creado_en >= ?
+          ORDER BY apoyos DESC, r.id DESC
+          LIMIT 5"
+    );
+    $stmt->execute([$usuario['id'], $categoria, $edificio ?? $zona, ahora(-30 * 86400)]);
+
+    responder(array_map(fn ($r) => [
+        'folio'          => $r['folio'],
+        'categoria'      => $r['categoria'],
+        'edificioNumber' => int_o_null($r['edificio_number']),
+        'zona'           => $r['zona'],
+        'descripcion'    => $r['descripcion'],
+        'foto'           => $r['foto'] ? $CONFIG['upload_url'] . '/' . $r['foto'] : null,
+        'estado'         => $r['estado'],
+        'prioridad'      => $r['prioridad'],
+        'createdAt'      => iso($r['creado_en']),
+        'apoyos'         => (int) $r['apoyos'],
+        'yaApoyo'        => (int) $r['ya_apoyo'] > 0,
+        'esMio'          => (int) $r['usuario_id'] === $usuario['id'],
+    ], $stmt->fetchAll()));
+}
+
+/**
+ * POST ?accion=apoyar  { "folio": "POLI-2026-0001" }
+ * Suma el apoyo del alumno (uno por persona). Al llegar a APOYOS_PARA_URGENTE
+ * el reporte pasa solo a prioridad alta y queda en el historial.
+ */
+function apoyar_reporte(): void
+{
+    $usuario = exigir_app();
+    $folio   = (string) (leer_json()['folio'] ?? '');
+    $pdo     = db();
+
+    $stmt = $pdo->prepare('SELECT id, estado, prioridad, usuario_id FROM reportes WHERE folio = ?');
+    $stmt->execute([$folio]);
+    $r = $stmt->fetch();
+    if (!$r) error_json('No existe ese folio', 404);
+    if ($r['estado'] === 'resuelto') error_json('Ese reporte ya fue resuelto. Si el problema volvió, envía uno nuevo.');
+    if ((int) $r['usuario_id'] === $usuario['id']) error_json('Ese reporte es tuyo: ya está contado.');
+
+    $ya = $pdo->prepare('SELECT 1 FROM reportes_apoyos WHERE reporte_id = ? AND usuario_id = ?');
+    $ya->execute([$r['id'], $usuario['id']]);
+    $nuevo = !$ya->fetchColumn();
+    $prioridad = $r['prioridad'];
+
+    if ($nuevo) {
+        $pdo->beginTransaction();
+        $pdo->prepare('INSERT INTO reportes_apoyos (reporte_id, usuario_id, creado_en) VALUES (?, ?, ?)')
+            ->execute([$r['id'], $usuario['id'], ahora()]);
+        guardar_historial((int) $r['id'], $usuario['id'], 'apoyo', null, 'a mí también me pasa');
+
+        $total = (int) $pdo->query('SELECT COUNT(*) FROM reportes_apoyos WHERE reporte_id = ' . (int) $r['id'])->fetchColumn();
+        if ($total >= APOYOS_PARA_URGENTE && $prioridad !== 'alta') {
+            $pdo->prepare('UPDATE reportes SET prioridad = ?, actualizado_en = ? WHERE id = ?')->execute(['alta', ahora(), $r['id']]);
+            guardar_historial((int) $r['id'], null, 'prioridad', $prioridad, 'alta');
+            $prioridad = 'alta';
+        }
+        $pdo->commit();
+    }
+
+    $total = (int) $pdo->query('SELECT COUNT(*) FROM reportes_apoyos WHERE reporte_id = ' . (int) $r['id'])->fetchColumn();
+    responder([
+        'ok'        => true,
+        'folio'     => $folio,
+        'apoyos'    => $total,
+        'prioridad' => $prioridad,
+        'yaEstaba'  => !$nuevo,   // true si ya lo había apoyado antes
+    ]);
 }
 
 // =======================================================================
@@ -262,7 +380,8 @@ function listar_historial(): void
 
     responder(array_map(function ($h) {
         // Si el que lo creó pidió anonimato, en el historial tampoco sale su nombre.
-        $oculto = $h['accion'] === 'creado' && $h['anonimo'];
+        // Quien se suma ("a mí también me pasa") tampoco: al panel solo le sirve el número.
+        $oculto = ($h['accion'] === 'creado' && $h['anonimo']) || $h['accion'] === 'apoyo';
         return [
             'folio'    => $h['folio'],
             'accion'   => $h['accion'],

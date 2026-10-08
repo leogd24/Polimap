@@ -1,9 +1,9 @@
 // src/admin/CampusHeatCard.jsx — Responsable: Alexis
 // Tarjeta "Mapa de calor del campus" del Tablero.
 //
-// Es el Poli DIBUJADO (SVG) a partir del mapa de OpenStreetMap: el terreno,
-// el camino interno, La Grana, el río, las canchas, la Prepa 10 y los
-// 10 edificios del Poli. Carga al instante y no descarga mapas.
+// Es el Poli DIBUJADO (SVG) a partir del mapa de OpenStreetMap: solo el
+// terreno del Matute Remus, su camino interno, La Grana y los 10 edificios
+// (la Prepa 10 y lo demás quedan fuera para no distraer). Carga al instante y no descarga mapas.
 // (El mapa real con calles está en la sección "Mapa de reportes".)
 //
 // El dibujo está GIRADO: el norte queda a la derecha (flecha "N"), así el
@@ -28,11 +28,13 @@ import { STATES } from './reportMeta.js';
 // ---------------------------------------------------------------------------
 // 1) Geometría (en pixeles de la captura de OpenStreetMap, norte arriba)
 // ---------------------------------------------------------------------------
-const X0 = 110; // ventana que se dibuja: x de 110 a 292, y de 100 a 372
-const X1 = 292;
-const Y0 = 100;
-const Y1 = 372;
-const S = 2.2; // escala
+// Ventana: SOLO el Poli (Matute Remus), del edificio 10 hasta La Grana.
+// x de 112 a 208, y de 112 a 362 (la Prepa 10 queda fuera).
+const X0 = 112;
+const X1 = 208;
+const Y0 = 112;
+const Y1 = 362;
+const S = 2.4; // escala
 const W = (Y1 - Y0) * S; // ancho del dibujo ya girado
 const H = (X1 - X0) * S; // alto del dibujo ya girado
 
@@ -62,20 +64,8 @@ const EDIFICIOS = {
   10: [145, 123, 172, 141],
 };
 
-/** Otros edificios del mapa (Prepa 10, FEU…): solo de fondo. */
-const OTROS = [
-  [175, 210, 187, 226],
-  [195, 243, 215, 253],
-  [182, 259, 215, 272],
-  [177, 276, 212, 289],
-  [177, 296, 203, 320],
-  [170, 327, 195, 342],
-  [217, 316, 251, 329],
-  [226, 265, 241, 275],
-  [260, 270, 282, 300],
-  [85, 278, 97, 305],
-  [105, 255, 118, 270],
-];
+/** Edificio pequeño junto al camino (sin número): solo de fondo. */
+const OTROS = [[175, 210, 187, 226]];
 
 const TERRENO = [
   [142, 73],
@@ -99,11 +89,6 @@ const CAMINO = [
   [177, 257],
   [170, 293],
   [158, 353],
-];
-const CAMINO_PREPA = [
-  [262, 267],
-  [284, 274],
-  [280, 372],
 ];
 const LA_GRANA = [
   [60, 345],
@@ -179,7 +164,7 @@ export default function CampusHeatCard({ reports, onSelectPlace }) {
         </defs>
 
         <g clipPath="url(#poli-ventana)">
-          {/* Terreno del Poli y la Prepa */}
+          {/* Terreno del Poli */}
           <polygon points={pts(TERRENO)} fill={colors.goldTint} stroke={alpha(colors.gold, 0.35)} strokeWidth="1.5" />
 
           {/* Río */}
@@ -197,7 +182,7 @@ export default function CampusHeatCard({ reports, onSelectPlace }) {
           ))}
 
           {/* Calles: borde gris + relleno blanco */}
-          {[LA_GRANA, CAMINO, CAMINO_PREPA].map((line, i) => (
+          {[LA_GRANA, CAMINO].map((line, i) => (
             <g key={i}>
               <polyline
                 points={pts(line)}
@@ -241,8 +226,6 @@ export default function CampusHeatCard({ reports, onSelectPlace }) {
 
           {/* Textos del mapa */}
           {textLabel(150, 357, 'La Grana', 13, { fontWeight: 700, transform: rotateText(150, 357, -90) })}
-          {textLabel(250, 302, 'Prepa 10', 12, { fontStyle: 'italic' })}
-          {textLabel(230, 205, 'Río', 11, { fontStyle: 'italic', fill: colors.cyanDark })}
           {textLabel(117, 232, 'Escuela Politécnica "Ing. Jorge Matute Remus"', 13, {
             fontStyle: 'italic',
             fontWeight: 700,
@@ -287,7 +270,7 @@ export default function CampusHeatCard({ reports, onSelectPlace }) {
           {/* Número de cada edificio */}
           {Object.entries(EDIFICIOS).map(([n, b]) => {
             const [cx, cy] = center(b);
-            const y = cy + 26; // debajo del edificio (hacia la Prepa)
+            const y = cy + 26; // debajo del edificio
             return (
               <g key={`n${n}`} pointerEvents="none">
                 <circle cx={cx} cy={y} r="10" fill={colors.blue} />

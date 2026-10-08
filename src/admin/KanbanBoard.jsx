@@ -5,7 +5,8 @@
 // (llama a onMove(folio, estado), que guarda con updateReport()).
 // En celular: toca la tarjeta y cambia el estado en el detalle.
 //
-// Dentro de cada columna van primero los urgentes y luego los más nuevos.
+// Dentro de cada columna van primero los urgentes, luego los que más alumnos
+// apoyan ("a mí también me pasa") y luego los más nuevos.
 // "Resuelto" solo muestra los 30 más recientes para no hacer la página eterna.
 import { useState } from 'react';
 import { colors, alpha } from '../styles/theme.js';
@@ -28,6 +29,7 @@ export default function KanbanBoard({ reports, buildingNames, onOpen, onMove, ne
           .sort(
             (a, b) =>
               (PRIORITY_ORDER[a.prioridad] ?? 1) - (PRIORITY_ORDER[b.prioridad] ?? 1) ||
+              (b.apoyos || 0) - (a.apoyos || 0) || // los que más alumnos apoyan, arriba
               (b.createdAt || '').localeCompare(a.createdAt || ''),
           );
         const shown = state.key === 'resuelto' ? items.slice(0, MAX_RESOLVED) : items;

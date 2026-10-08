@@ -72,6 +72,7 @@ export default function ReportCard({ report, location, onOpen, compact = false, 
               {report.folio}
             </span>
             <PriorityTag prioridad={report.prioridad} />
+            <SupportTag apoyos={report.apoyos} />
             {isNew && (
               <span
                 className="px-2 py-[1px] text-[11px] font-black"
@@ -129,6 +130,20 @@ export default function ReportCard({ report, location, onOpen, compact = false, 
         </div>
       </Card>
     </button>
+  );
+}
+
+/** "+5": alumnos que se sumaron con "A mí también me pasa". */
+function SupportTag({ apoyos }) {
+  if (!apoyos) return null;
+  return (
+    <span
+      className="inline-flex items-center gap-[2px] px-2 py-[1px] text-[11px] font-black"
+      style={{ backgroundColor: colors.magentaTint, color: colors.magentaDark, borderRadius: 6 }}
+      title={`${apoyos} ${apoyos === 1 ? 'alumno más lo reportó' : 'alumnos más lo reportaron'}`}
+    >
+      <Icon name="group" size={13} color={colors.magentaDark} />+{apoyos}
+    </span>
   );
 }
 

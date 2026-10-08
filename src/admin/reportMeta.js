@@ -126,44 +126,6 @@ export function activeFilterCount(filters) {
   return Object.entries(filters).filter(([, v]) => v).length;
 }
 
-/**
- * Descarga los reportes como CSV (Excel lo abre directo).
- * Lleva BOM para que Excel respete los acentos.
- */
-export function downloadCsv(reports, buildingNames) {
-  const header = [
-    'Folio', 'Fecha', 'Categoría', 'Ubicación', 'Descripción', 'Estado', 'Prioridad',
-    'Comentario', 'Resuelto', 'Días para resolver', 'Enviado por', 'Latitud', 'Longitud',
-  ];
-  const rows = reports.map((r) => [
-    r.folio,
-    (r.createdAt || '').replace('T', ' '),
-    categoryInfo(r.categoria).label,
-    locationText(r, buildingNames),
-    r.descripcion,
-    stateInfo(r.estado).label,
-    priorityInfo(r.prioridad).label,
-    r.comentarioAdmin || '',
-    (r.resolvedAt || '').replace('T', ' '),
-    resolutionDays(r)?.toFixed(1) ?? '',
-    r.autor ? `${r.autor.nombre} <${r.autor.correo}>` : 'Anónimo',
-    r.lat ?? '',
-    r.lng ?? '',
-  ]);
-  const escape = (value) => `"${String(value).replace(/"/g, '""')}"`;
-  const csv = [header, ...rows].map((row) => row.map(escape).join(',')).join('\r\n');
-
-  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `polimap-reportes-${new Date().toISOString().slice(0, 10)}.csv`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
 /** Fecha local de hoy "AAAA-MM-DD" (no la de Londres, como toISOString). */
 export function localDay(date = new Date()) {
   return date.toLocaleDateString('en-CA');
@@ -180,6 +142,8 @@ export function historyInfo(h) {
       return { icon: 'flag', text: `Cambió la prioridad: ${priorityInfo(h.antes).label} → ${priorityInfo(h.despues).label}` };
     case 'comentario':
       return { icon: 'chat', text: h.despues ? `Comentó: “${h.despues}”` : 'Borró el comentario' };
+    case 'apoyo':
+      return { icon: 'group_add', text: 'Un alumno se sumó: “a mí también me pasa”' };
     default:
       return { icon: 'history', text: h.accion };
   }

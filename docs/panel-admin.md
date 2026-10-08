@@ -10,7 +10,7 @@ Entrada: correo designado + contraseña, o Google con `@academicos.udg.mx` desig
 |---|---|---|
 | 1 | Buscador (folio, texto, edificio, alumno) y filtros por estado, categoría, edificio, prioridad y fechas | `ui.jsx` (FilterBar), `reportMeta.js` (applyFilters) |
 | 2 | Se actualiza solo cada 30 s, marca los NUEVOS, "(3) Panel POLIMAP" en la pestaña y sonido opcional | `AdminApp.jsx` |
-| 3 | Exportar a Excel (CSV con acentos correctos) | `reportMeta.js` (downloadCsv) |
+| 3 | Exportar a Excel (.xlsx real): hoja Resumen con 6 indicadores, 4 tablas y 4 gráficas nativas; hoja Reportes con formato y filtros; hoja Notas. Respeta los filtros del panel | `excelExport.js` |
 | 4 | Tarjetas: sin atender, en revisión, en proceso, resueltos del mes, tiempo promedio de solución | `DashboardSection.jsx` |
 | 5 | Mapa de calor del campus en el Tablero (el Poli dibujado a partir de OpenStreetMap, últimos 30 días; tocar un edificio filtra) y mapa real con color por estado | `CampusHeatCard.jsx`, `MapSection.jsx` (Leaflet, se descarga solo al abrirlo) |
 | 6 | Gráficas: estado, reportes por semana, por categoría, por lugar y tiempo de solución | `StatsSection.jsx` |

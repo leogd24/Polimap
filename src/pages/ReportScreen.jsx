@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { colors } from '../styles/theme.js';
 import { campusBuildings } from '../data/campusBuildings.js';
 import Icon from '../components/Icon.jsx';
@@ -7,7 +7,8 @@ import FormLabel from '../components/FormLabel.jsx';
 import FilledButton from '../components/FilledButton.jsx';
 import Dialog from '../components/Dialog.jsx';
 import { SelectField, TextArea, Switch } from '../components/Inputs.jsx';
-import { createReport } from '../lib/api.js';
+import { createReport, getSimilarReports, supportReport } from '../lib/api.js';
+import SimilarReports from '../components/SimilarReports.jsx';
 
 // value = clave de la base de datos (docs/contrato-datos.md), label = lo que se ve.
 const categories = [
@@ -42,6 +43,45 @@ export default function ReportScreen({ user }) {
   const [errors, setErrors] = useState({});
   const [dialog, setDialog] = useState(null); // { title, content } al terminar
   const [sending, setSending] = useState(false);
+  // "A mí también me pasa": reportes parecidos del mismo lugar y categoría.
+  const [similar, setSimilar] = useState([]);
+  const [supporting, setSupporting] = useState(null); // folio que se está sumando
+
+  // Cada vez que cambian la categoría o el lugar, buscamos si ya lo reportaron.
+  useEffect(() => {
+    if (!category || !location) {
+      setSimilar([]);
+      return undefined;
+    }
+    let cancelado = false;
+    getSimilarReports(category, location).then((lista) => {
+      if (!cancelado) setSimilar(lista);
+    });
+    return () => {
+      cancelado = true;
+    };
+  }, [category, location]);
+
+  const support = async (folio) => {
+    setSupporting(folio);
+    try {
+      const result = await supportReport(folio);
+      const personas = result.apoyos + 1;
+      setDialog({
+        title: result.yaEstaba ? 'Ya estabas sumado' : '¡Gracias por sumarte!',
+        content:
+          `${personas} personas reportaron ${folio}. ` +
+          (result.prioridad === 'alta'
+            ? 'Ya es urgente para el equipo del Poli.'
+            : 'Mientras más se sumen, más rápido se atiende.') +
+          ' Lo verás en "Mis reportes".',
+      });
+    } catch (error) {
+      setDialog({ title: 'No se pudo sumar', content: error.message, failed: true });
+    } finally {
+      setSupporting(null);
+    }
+  };
 
   const validate = () => {
     const next = {};
@@ -96,6 +136,7 @@ export default function ReportScreen({ user }) {
     setPhotoAdded(false);
     setDescription('');
     setErrors({});
+    setSimilar([]);
   };
 
   return (
@@ -144,6 +185,8 @@ export default function ReportScreen({ user }) {
           error={errors.location}
         />
       </div>
+
+      <SimilarReports reports={similar} onSupport={support} busy={supporting} />
 
       <div className="mt-[18px]">
         <FormLabel number="3" label="Fotografía" />

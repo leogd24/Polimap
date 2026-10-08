@@ -139,6 +139,13 @@ export default function ReportDetail({ report, location, onClose, onSaved, onErr
                 label="Enviado por"
                 value={report.autor ? `${report.autor.nombre || ''} (${report.autor.correo})` : 'Anónimo'}
               />
+              {report.apoyos > 0 && (
+                <DataRow
+                  icon="group"
+                  label="A ellos también les pasa"
+                  value={`${report.apoyos} ${report.apoyos === 1 ? 'alumno más' : 'alumnos más'}`}
+                />
+              )}
               <DataRow icon="schedule" label="Enviado" value={formatDate(report.createdAt)} />
               {report.resolvedAt && (
                 <DataRow
