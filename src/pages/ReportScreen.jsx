@@ -7,14 +7,17 @@ import FormLabel from '../components/FormLabel.jsx';
 import FilledButton from '../components/FilledButton.jsx';
 import Dialog from '../components/Dialog.jsx';
 import { SelectField, TextArea, Switch } from '../components/Inputs.jsx';
+import { createReport } from '../lib/api.js';
 
+// value = clave de la base de datos (docs/contrato-datos.md), label = lo que se ve.
 const categories = [
-  'Basura',
-  'Mobiliario dañado',
-  'Baños en mal estado',
-  'Fuga de agua',
-  'Iluminación',
-  'Otro',
+  { value: 'basura', label: 'Basura' },
+  { value: 'mobiliario', label: 'Mobiliario dañado' },
+  { value: 'banos', label: 'Baños en mal estado' },
+  { value: 'fuga', label: 'Fuga de agua' },
+  { value: 'iluminacion', label: 'Iluminación' },
+  { value: 'riesgo', label: 'Riesgo o desperfecto' },
+  { value: 'otro', label: 'Otro' },
 ];
 
 const locationOptions = [
@@ -27,14 +30,18 @@ const locationOptions = [
 ];
 
 /// Equivalente de screens/report_screen.dart
-export default function ReportScreen() {
+/// Login (Alexis): solo se muestra con sesión (MainShell). El reporte se envía
+/// con createReport() de src/lib/api.js; la cookie de sesión dice quién lo manda.
+/// La foto y el GPS reales los integra Katia.
+export default function ReportScreen({ user }) {
   const [category, setCategory] = useState(null);
   const [location, setLocation] = useState(null);
   const [anonymous, setAnonymous] = useState(true);
   const [photoAdded, setPhotoAdded] = useState(false);
   const [description, setDescription] = useState('');
   const [errors, setErrors] = useState({});
-  const [dialog, setDialog] = useState(false);
+  const [dialog, setDialog] = useState(null); // { title, content } al terminar
+  const [sending, setSending] = useState(false);
 
   const validate = () => {
     const next = {};
@@ -47,13 +54,42 @@ export default function ReportScreen() {
     return Object.keys(next).length === 0;
   };
 
-  const submit = () => {
-    if (!validate()) return;
-    setDialog(true);
+  const submit = async () => {
+    if (!validate() || sending) return;
+
+    // FormData con los campos del contrato (api/reportes.php).
+    const data = new FormData();
+    data.append('categoria', category);
+    data.append('descripcion', description.trim());
+    if (location.startsWith('Edificio ')) data.append('edificio_number', location.replace('Edificio ', ''));
+    else data.append('zona', location);
+    data.append('anonimo', anonymous ? '1' : '0');
+
+    setSending(true);
+    try {
+      const result = await createReport(data);
+      setDialog(
+        result.offline
+          ? {
+              title: 'Guardado sin conexión',
+              content: `Tu reporte quedó en este celular con el folio ${result.folio}. Envíalo de nuevo cuando tengas internet.`,
+            }
+          : {
+              title: 'Reporte enviado',
+              content: `Tu folio es ${result.folio}. Quedó registrado y el equipo del Poli le dará seguimiento.`,
+            }
+      );
+    } catch (error) {
+      setDialog({ title: 'No se pudo enviar', content: error.message, failed: true });
+    } finally {
+      setSending(false);
+    }
   };
 
   const reset = () => {
-    setDialog(false);
+    const failed = dialog?.failed;
+    setDialog(null);
+    if (failed) return; // si falló, conservamos lo escrito para reintentar
     setCategory(null);
     setLocation(null);
     setAnonymous(true);
@@ -90,7 +126,7 @@ export default function ReportScreen() {
           onChange={setCategory}
           placeholder="Selecciona una categoría"
           prefixIcon="category"
-          options={categories.map((item) => ({ value: item, label: item }))}
+          options={categories}
           error={errors.category}
         />
       </div>
@@ -167,16 +203,27 @@ export default function ReportScreen() {
       </Card>
 
       <div className="mt-[18px]">
-        <FilledButton onClick={submit} icon="send" className="w-full" style={{ height: 56 }}>
-          Enviar reporte
+        <FilledButton
+          onClick={submit}
+          icon={sending ? 'hourglass_top' : 'send'}
+          className="w-full"
+          style={{ height: 56, opacity: sending ? 0.7 : 1 }}
+        >
+          {sending ? 'Enviando…' : 'Enviar reporte'}
         </FilledButton>
+        {user && (
+          <p className="m-0 mt-2 text-center text-xs" style={{ color: colors.textMuted }}>
+            Sesión: {user.correo}
+            {anonymous ? ' · el equipo no verá tu nombre' : ''}
+          </p>
+        )}
       </div>
 
       {dialog && (
         <Dialog
-          icon="check_circle"
-          title="Reporte preparado"
-          content="La interfaz está lista. Al integrar la base de datos, el reporte se enviará a las autoridades escolares."
+          icon={dialog.failed ? 'error' : 'check_circle'}
+          title={dialog.title}
+          content={dialog.content}
           actionLabel="Entendido"
           onAction={reset}
         />

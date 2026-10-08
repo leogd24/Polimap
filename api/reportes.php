@@ -2,12 +2,15 @@
 /**
  * POLIMAP — Reportes comunitarios (módulo de Katia)
  *
- *   POST  /api/reportes.php                      → crea un reporte (FormData, con foto opcional)
- *   GET   /api/reportes.php?folios=POLI-2026-0001,POLI-2026-0002
- *                                                → "Mis reportes" (solo esos folios)
- *   GET   /api/reportes.php  (+ encabezado X-Admin-Token)
- *                                                → todos, para el panel admin
- *   PATCH /api/reportes.php  (+ X-Admin-Token)   → cambia estado / comentario
+ * Todo requiere sesión (api/auth.php). La cookie viaja sola en cada petición.
+ *
+ *   POST  /api/reportes.php                 → crea un reporte (alumno; FormData, foto opcional)
+ *   GET   /api/reportes.php                 → "Mis reportes": los de la cuenta con sesión
+ *   GET   /api/reportes.php?todos=1         → todos, para el panel admin
+ *   GET   /api/reportes.php?historial=POLI-2026-0001 → cambios de ese reporte (admin)
+ *   GET   /api/reportes.php?historial=todos → últimos 200 cambios de todos (admin)
+ *   PATCH /api/reportes.php                 → cambia estado / prioridad / comentario (admin)
+ *         (se manda como POST ?_method=PATCH)
  *
  * Al crear un reporte, además de guardarlo, manda un aviso por correo
  * (api/notificar.php). Si el correo falla, el reporte igual queda guardado.
@@ -15,22 +18,24 @@
  * Campos y categorías: ver docs/contrato-datos.md, sección 3.
  */
 require __DIR__ . '/database.php';
+require __DIR__ . '/sesion.php';      // quién está usando la API
 require __DIR__ . '/notificar.php';   // aviso por correo de reportes nuevos
 
 const CATEGORIAS = ['basura', 'mobiliario', 'banos', 'fuga', 'iluminacion', 'riesgo', 'otro'];
 const ESTADOS    = ['recibido', 'revision', 'proceso', 'resuelto'];
+const PRIORIDADES = ['baja', 'media', 'alta'];
+// Estas categorías entran solas como "urgentes" (prioridad alta).
+const CATEGORIAS_URGENTES = ['fuga', 'riesgo'];
 
-// Algunos hostings gratuitos bloquean PATCH. Por eso el panel admin manda
-// POST /api/reportes.php?_method=PATCH y aquí lo tratamos como PATCH.
-$metodo = $_SERVER['REQUEST_METHOD'];
-if ($metodo === 'POST' && ($_GET['_method'] ?? '') === 'PATCH') {
-    $metodo = 'PATCH';
-}
-
-switch ($metodo) {
+// metodo_http() (database.php) convierte POST ?_method=PATCH en PATCH,
+// porque algunos hostings gratuitos bloquean PATCH.
+switch (metodo_http()) {
     case 'POST':  crear_reporte();   break;
-    case 'GET':   listar_reportes(); break;
-    case 'PATCH': cambiar_estado();  break;
+    case 'GET':
+        if (isset($_GET['historial'])) listar_historial();
+        else listar_reportes();
+        break;
+    case 'PATCH': cambiar_reporte(); break;
     default:      error_json('Método no permitido', 405);
 }
 
@@ -40,6 +45,7 @@ switch ($metodo) {
 function crear_reporte(): void
 {
     global $CONFIG;
+    $usuario = exigir_app();   // solo alumnos con sesión pueden reportar
 
     // 1) Leer y limpiar los campos del FormData ---------------------------
     $categoria   = trim($_POST['categoria'] ?? '');
@@ -81,18 +87,21 @@ function crear_reporte(): void
     $pdo = db();
     try {
         $pdo->beginTransaction();
+        $prioridad = in_array($categoria, CATEGORIAS_URGENTES, true) ? 'alta' : 'media';
+        $creado    = ahora();
         $stmt = $pdo->prepare(
             'INSERT INTO reportes
-               (categoria, edificio_number, zona, descripcion, foto, lat, lng, precision_m, anonimo)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+               (categoria, edificio_number, zona, descripcion, foto, lat, lng, precision_m, anonimo,
+                prioridad, usuario_id, creado_en)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
-        $stmt->execute([$categoria, $edificio, $zona, $descripcion, $foto, $lat, $lng, $precision, $anonimo]);
+        $stmt->execute([$categoria, $edificio, $zona, $descripcion, $foto, $lat, $lng, $precision, $anonimo,
+                        $prioridad, $usuario['id'], $creado]);
 
         $id    = (int) $pdo->lastInsertId();
         $folio = sprintf('POLI-%s-%04d', date('Y'), $id);   // POLI-2026-0001
         $pdo->prepare('UPDATE reportes SET folio = ? WHERE id = ?')->execute([$folio, $id]);
-
-        $creado = $pdo->query("SELECT creado_en FROM reportes WHERE id = $id")->fetchColumn();
+        guardar_historial($id, $usuario['id'], 'creado', null, 'recibido');
         $pdo->commit();
     } catch (PDOException $e) {
         $pdo->rollBack();
@@ -118,6 +127,8 @@ function crear_reporte(): void
         'lat'         => $lat,
         'lng'         => $lng,
         'anonimo'     => $anonimo,
+        'autor'       => $anonimo ? null : trim($usuario['nombre'] . ' <' . $usuario['correo'] . '>'),
+        'prioridad'   => $prioridad,
         'creado_en'   => $creado,
     ], $foto ? $CONFIG['upload_dir'] . '/' . $foto : null);
 
@@ -125,6 +136,7 @@ function crear_reporte(): void
         'ok'           => true,
         'folio'        => $folio,
         'estado'       => 'recibido',
+        'prioridad'    => $prioridad,
         'createdAt'    => iso($creado),
         'avisoEnviado' => $avisoEnviado,   // true si llegó el correo; false no es error
     ], 201);
@@ -177,33 +189,34 @@ function guardar_foto(array $CONFIG): ?string
 }
 
 // =======================================================================
-// GET: "Mis reportes" (por folios) o todos (admin)
+// GET: "Mis reportes" (los de mi cuenta) o todos (admin)
 // =======================================================================
 function listar_reportes(): void
 {
-    global $CONFIG;
     $pdo = db();
-    $sql = 'SELECT folio, categoria, edificio_number, zona, descripcion, foto, lat, lng,
-                   estado, comentario_admin, creado_en, actualizado_en
-              FROM reportes';
+    $sql = 'SELECT r.id, r.folio, r.categoria, r.edificio_number, r.zona, r.descripcion, r.foto,
+                   r.lat, r.lng, r.anonimo, r.estado, r.prioridad, r.comentario_admin,
+                   r.creado_en, r.actualizado_en, r.resuelto_en,
+                   u.nombre AS autor_nombre, u.correo AS autor_correo
+              FROM reportes r LEFT JOIN usuarios u ON u.id = r.usuario_id';
 
-    if (!empty($_GET['folios'])) {
-        // "POLI-2026-0001,POLI-2026-0002" → máximo 50 folios con formato válido
-        $folios = array_slice(array_filter(
-            array_map('trim', explode(',', $_GET['folios'])),
-            fn ($f) => preg_match('/^POLI-\d{4}-\d{4,}$/', $f)
-        ), 0, 50);
-        if (!$folios) responder([]);
-
-        $marcas = implode(',', array_fill(0, count($folios), '?'));   // ?,?,?
-        $stmt = $pdo->prepare("$sql WHERE folio IN ($marcas) ORDER BY id DESC");
-        $stmt->execute(array_values($folios));
-    } else {
+    if (!empty($_GET['todos'])) {
         exigir_admin();   // la lista completa solo la ve el administrador
-        $stmt = $pdo->query("$sql ORDER BY id DESC");
+        $filas = $pdo->query("$sql ORDER BY r.id DESC")->fetchAll();
+        responder(array_map(fn ($r) => reporte_json($r, true), $filas));
     }
 
-    responder(array_map(fn ($r) => [
+    $usuario = exigir_app();
+    $stmt = $pdo->prepare("$sql WHERE r.usuario_id = ? ORDER BY r.id DESC");
+    $stmt->execute([$usuario['id']]);
+    responder(array_map(fn ($r) => reporte_json($r, false), $stmt->fetchAll()));
+}
+
+/** Fila de la BD → JSON del contrato. El autor solo lo ve el admin y solo si NO es anónimo. */
+function reporte_json(array $r, bool $paraAdmin): array
+{
+    global $CONFIG;
+    $json = [
         'folio'           => $r['folio'],
         'categoria'       => $r['categoria'],
         'edificioNumber'  => int_o_null($r['edificio_number']),
@@ -212,50 +225,127 @@ function listar_reportes(): void
         'foto'            => $r['foto'] ? $CONFIG['upload_url'] . '/' . $r['foto'] : null,
         'lat'             => num_o_null($r['lat']),
         'lng'             => num_o_null($r['lng']),
+        'anonimo'         => (bool) $r['anonimo'],
         'estado'          => $r['estado'],
+        'prioridad'       => $r['prioridad'],
         'comentarioAdmin' => $r['comentario_admin'],
         'createdAt'       => iso($r['creado_en']),
         'updatedAt'       => iso($r['actualizado_en']),
-    ], $stmt->fetchAll()));
+        'resolvedAt'      => iso($r['resuelto_en']),
+    ];
+    if ($paraAdmin) {
+        $json['autor'] = (!$r['anonimo'] && $r['autor_correo'])
+            ? ['nombre' => $r['autor_nombre'], 'correo' => $r['autor_correo']]
+            : null;
+    }
+    return $json;
 }
 
 // =======================================================================
-// PATCH: cambiar estado (panel admin)
-// Cuerpo JSON: { "folio": "POLI-2026-0001", "estado": "proceso", "comentarioAdmin": "..." }
+// GET ?historial=FOLIO | todos  (admin)
 // =======================================================================
-function cambiar_estado(): void
+function listar_historial(): void
 {
     exigir_admin();
+    $sql = 'SELECT h.accion, h.valor_anterior, h.valor_nuevo, h.creado_en,
+                   r.folio, u.nombre, u.correo, r.anonimo
+              FROM reportes_historial h
+              JOIN reportes r ON r.id = h.reporte_id
+              LEFT JOIN usuarios u ON u.id = h.usuario_id';
 
-    $datos  = json_decode(file_get_contents('php://input'), true) ?? [];
-    $folio  = $datos['folio'] ?? '';
-    $estado = $datos['estado'] ?? '';
-    $coment = isset($datos['comentarioAdmin']) ? mb_substr(trim((string) $datos['comentarioAdmin']), 0, 500) : null;
-
-    if (!in_array($estado, ESTADOS, true)) {
-        error_json('Estado no válido (recibido, revision, proceso, resuelto)');
+    if ($_GET['historial'] === 'todos') {
+        $stmt = db()->query("$sql ORDER BY h.id DESC LIMIT 200");
+    } else {
+        $stmt = db()->prepare("$sql WHERE r.folio = ? ORDER BY h.id DESC");
+        $stmt->execute([$_GET['historial']]);
     }
 
-    $stmt = db()->prepare(
-        'UPDATE reportes SET estado = ?, comentario_admin = COALESCE(?, comentario_admin) WHERE folio = ?'
-    );
-    $stmt->execute([$estado, $coment, $folio]);
-
-    // rowCount es 0 si no existe el folio (o si no cambió nada): lo revisamos.
-    if ($stmt->rowCount() === 0) {
-        $existe = db()->prepare('SELECT 1 FROM reportes WHERE folio = ?');
-        $existe->execute([$folio]);
-        if (!$existe->fetchColumn()) error_json('No existe ese folio', 404);
-    }
-    responder(['ok' => true]);
+    responder(array_map(function ($h) {
+        // Si el que lo creó pidió anonimato, en el historial tampoco sale su nombre.
+        $oculto = $h['accion'] === 'creado' && $h['anonimo'];
+        return [
+            'folio'    => $h['folio'],
+            'accion'   => $h['accion'],
+            'antes'    => $h['valor_anterior'],
+            'despues'  => $h['valor_nuevo'],
+            'fecha'    => iso($h['creado_en']),
+            'quien'    => ($oculto || !$h['correo']) ? null : ['nombre' => $h['nombre'], 'correo' => $h['correo']],
+        ];
+    }, $stmt->fetchAll()));
 }
 
-/** Corta la petición si no trae la clave de administrador correcta. */
-function exigir_admin(): void
+// =======================================================================
+// PATCH: cambiar estado, prioridad o comentario (panel admin)
+// Cuerpo JSON (manda solo lo que cambia):
+//   { "folio": "POLI-2026-0001", "estado": "proceso", "prioridad": "alta", "comentarioAdmin": "..." }
+// =======================================================================
+function cambiar_reporte(): void
 {
-    global $CONFIG;
-    $token = $_SERVER['HTTP_X_ADMIN_TOKEN'] ?? '';
-    if ($token === '' || !hash_equals($CONFIG['admin_token'], $token)) {
-        error_json('No autorizado', 401);
+    $admin = exigir_admin();
+    $datos = leer_json();
+
+    $stmt = db()->prepare('SELECT id, estado, prioridad, comentario_admin, resuelto_en FROM reportes WHERE folio = ?');
+    $stmt->execute([(string) ($datos['folio'] ?? '')]);
+    $actual = $stmt->fetch();
+    if (!$actual) error_json('No existe ese folio', 404);
+
+    $nuevo = [
+        'estado'           => $actual['estado'],
+        'prioridad'        => $actual['prioridad'],
+        'comentario_admin' => $actual['comentario_admin'],
+        'resuelto_en'      => $actual['resuelto_en'],
+    ];
+    if (array_key_exists('estado', $datos)) {
+        if (!in_array($datos['estado'], ESTADOS, true)) {
+            error_json('Estado no válido (recibido, revision, proceso, resuelto)');
+        }
+        $nuevo['estado'] = $datos['estado'];
     }
+    if (array_key_exists('prioridad', $datos)) {
+        if (!in_array($datos['prioridad'], PRIORIDADES, true)) {
+            error_json('Prioridad no válida (baja, media, alta)');
+        }
+        $nuevo['prioridad'] = $datos['prioridad'];
+    }
+    if (array_key_exists('comentarioAdmin', $datos)) {
+        $texto = mb_substr(trim((string) $datos['comentarioAdmin']), 0, 500);
+        $nuevo['comentario_admin'] = $texto === '' ? null : $texto;
+    }
+
+    // Fecha de solución: se pone al marcar "resuelto" y se quita si lo reabren.
+    if ($nuevo['estado'] === 'resuelto' && $actual['estado'] !== 'resuelto') $nuevo['resuelto_en'] = ahora();
+    if ($nuevo['estado'] !== 'resuelto') $nuevo['resuelto_en'] = null;
+
+    $pdo = db();
+    $pdo->beginTransaction();
+    $pdo->prepare('UPDATE reportes SET estado = ?, prioridad = ?, comentario_admin = ?, resuelto_en = ?, actualizado_en = ? WHERE id = ?')
+        ->execute([$nuevo['estado'], $nuevo['prioridad'], $nuevo['comentario_admin'], $nuevo['resuelto_en'], ahora(), $actual['id']]);
+
+    // Una línea de historial por cada cosa que cambió.
+    $cambios = ['estado' => 'estado', 'prioridad' => 'prioridad', 'comentario_admin' => 'comentario'];
+    foreach ($cambios as $campo => $accion) {
+        if ($nuevo[$campo] !== $actual[$campo]) {
+            guardar_historial((int) $actual['id'], $admin['id'], $accion, $actual[$campo], $nuevo[$campo]);
+        }
+    }
+    $pdo->commit();
+
+    responder([
+        'ok'              => true,
+        'folio'           => $datos['folio'],
+        'estado'          => $nuevo['estado'],
+        'prioridad'       => $nuevo['prioridad'],
+        'comentarioAdmin' => $nuevo['comentario_admin'],
+        'updatedAt'       => iso(ahora()),
+        'resolvedAt'      => iso($nuevo['resuelto_en']),
+    ]);
+}
+
+/** Agrega una línea al historial de un reporte. */
+function guardar_historial(int $reporteId, ?int $usuarioId, string $accion, ?string $antes, ?string $despues): void
+{
+    db()->prepare(
+        'INSERT INTO reportes_historial (reporte_id, usuario_id, accion, valor_anterior, valor_nuevo, creado_en)
+         VALUES (?, ?, ?, ?, ?, ?)'
+    )->execute([$reporteId, $usuarioId, $accion, $antes, $despues, ahora()]);
 }

@@ -1,26 +1,49 @@
 // src/admin/ReportDetail.jsx — Responsable: Alexis
-// Ventana con el detalle de un reporte: foto grande, datos, enlace al mapa
-// y controles para cambiar el estado y dejar un comentario.
+// Ventana con el detalle de un reporte: foto grande, datos, quién lo envió
+// (si no es anónimo), enlace al mapa, controles para cambiar estado y
+// prioridad, comentario e historial de cambios.
 //
 // Al guardar llama a updateReport() de src/lib/api.js, que hace
-// POST /api/reportes.php?_method=PATCH con la clave de administrador.
-import { useState } from 'react';
+// POST /api/reportes.php?_method=PATCH. La cookie de sesión dice qué
+// administrador hizo el cambio (queda en el historial).
+import { useEffect, useState } from 'react';
 import { colors, alpha } from '../styles/theme.js';
-import { updateReport } from '../lib/api.js';
+import { updateReport, getReportHistory } from '../lib/api.js';
 import Card, { Divider } from '../components/Card.jsx';
 import FilledButton from '../components/FilledButton.jsx';
 import Icon from '../components/Icon.jsx';
 import { TextArea } from '../components/Inputs.jsx';
 import StateChip from './StateChip.jsx';
-import { STATES, categoryInfo, formatDate } from './reportMeta.js';
+import HistoryList from './HistoryList.jsx';
+import { PriorityChip } from './ui.jsx';
+import { STATES, PRIORITIES, categoryInfo, formatDate, formatDuration, resolutionDays } from './reportMeta.js';
 
-export default function ReportDetail({ report, token, location, onClose, onSaved, onError }) {
+export default function ReportDetail({ report, location, onClose, onSaved, onError }) {
   const [estado, setEstado] = useState(report.estado);
+  const [prioridad, setPrioridad] = useState(report.prioridad || 'media');
   const [comentario, setComentario] = useState(report.comentarioAdmin || '');
   const [saving, setSaving] = useState(false);
+  const [history, setHistory] = useState(null);
+
+  // Historial de este reporte (se vuelve a pedir si cambia algo).
+  useEffect(() => {
+    getReportHistory(report.folio)
+      .then(setHistory)
+      .catch(() => setHistory([]));
+  }, [report.folio, report.updatedAt]);
+
+  // Cerrar con la tecla Esc.
+  useEffect(() => {
+    const onKey = (event) => event.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
 
   const category = categoryInfo(report.categoria);
-  const changed = estado !== report.estado || comentario !== (report.comentarioAdmin || '');
+  const changed =
+    estado !== report.estado ||
+    prioridad !== (report.prioridad || 'media') ||
+    comentario !== (report.comentarioAdmin || '');
   const mapUrl =
     report.lat != null && report.lng != null
       ? `https://www.openstreetmap.org/?mlat=${report.lat}&mlon=${report.lng}#map=19/${report.lat}/${report.lng}`
@@ -29,9 +52,14 @@ export default function ReportDetail({ report, token, location, onClose, onSaved
   async function save() {
     if (!changed || saving) return;
     setSaving(true);
+    // Solo mandamos lo que cambió (así el historial queda limpio).
+    const cambios = {};
+    if (estado !== report.estado) cambios.estado = estado;
+    if (prioridad !== (report.prioridad || 'media')) cambios.prioridad = prioridad;
+    if (comentario !== (report.comentarioAdmin || '')) cambios.comentarioAdmin = comentario;
     try {
-      await updateReport(token, report.folio, estado, comentario);
-      onSaved({ folio: report.folio, estado, comentarioAdmin: comentario || null });
+      const result = await updateReport(report.folio, cambios);
+      onSaved(result);
       onClose();
     } catch (error) {
       onError(`No se pudo guardar: ${error.message}`);
@@ -66,6 +94,7 @@ export default function ReportDetail({ report, token, location, onClose, onSaved
                 {category.label}
               </div>
             </div>
+            <PriorityChip prioridad={report.prioridad} />
             <StateChip estado={report.estado} />
             <button
               type="button"
@@ -105,7 +134,19 @@ export default function ReportDetail({ report, token, location, onClose, onSaved
             </p>
             <div className="mt-4 grid gap-2 text-sm">
               <DataRow icon="location_on" label="Ubicación" value={location} />
+              <DataRow
+                icon="person"
+                label="Enviado por"
+                value={report.autor ? `${report.autor.nombre || ''} (${report.autor.correo})` : 'Anónimo'}
+              />
               <DataRow icon="schedule" label="Enviado" value={formatDate(report.createdAt)} />
+              {report.resolvedAt && (
+                <DataRow
+                  icon="task_alt"
+                  label="Resuelto"
+                  value={`${formatDate(report.resolvedAt)} (en ${formatDuration(resolutionDays(report))})`}
+                />
+              )}
               {report.updatedAt && (
                 <DataRow icon="update" label="Última actualización" value={formatDate(report.updatedAt)} />
               )}
@@ -153,6 +194,31 @@ export default function ReportDetail({ report, token, location, onClose, onSaved
               })}
             </div>
 
+            <div className="mt-4 text-sm font-black">Prioridad</div>
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              {PRIORITIES.map((p) => {
+                const active = prioridad === p.key;
+                return (
+                  <button
+                    key={p.key}
+                    type="button"
+                    onClick={() => setPrioridad(p.key)}
+                    aria-pressed={active}
+                    className="tappable flex min-h-[44px] items-center justify-center gap-1 px-2 text-sm font-bold"
+                    style={{
+                      backgroundColor: active ? p.bg : colors.surface,
+                      color: active ? p.fg : colors.textSecondary,
+                      border: active ? `2px solid ${p.fg}` : `1px solid ${colors.border}`,
+                      borderRadius: 14,
+                    }}
+                  >
+                    <Icon name={p.icon} size={18} color={active ? p.fg : colors.textSecondary} />
+                    {p.label}
+                  </button>
+                );
+              })}
+            </div>
+
             <div className="mt-4 text-sm font-black">Comentario para el equipo</div>
             <div className="mt-2">
               <TextArea
@@ -172,6 +238,20 @@ export default function ReportDetail({ report, token, location, onClose, onSaved
             >
               {saving ? 'Guardando…' : 'Guardar cambios'}
             </FilledButton>
+          </div>
+
+          <Divider />
+
+          {/* Historial: quién cambió qué y cuándo */}
+          <div className="p-5">
+            <div className="mb-3 text-sm font-black">Historial</div>
+            {history === null ? (
+              <p className="m-0 text-sm" style={{ color: colors.textMuted }}>
+                Cargando…
+              </p>
+            ) : (
+              <HistoryList items={history} />
+            )}
           </div>
         </Card>
       </div>

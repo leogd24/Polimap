@@ -189,8 +189,9 @@ Respuesta **201**:
 | Otro | `otro` |
 
 ### `GET /api/reportes.php` → Katia ("Mis reportes" / panel admin)
-Sin `?folios=` regresa **todos** y exige el encabezado `X-Admin-Token` (clave de `api/config.php`).
-`?folios=POLI-2026-0001,POLI-2026-0002` para "Mis reportes" (los folios se guardan en `localStorage` del celular).
+Con sesión de alumno regresa **sus** reportes ("Mis reportes"). `?todos=1` regresa todos y exige sesión de administrador
+(ver `docs/login.md`). Crear un reporte (`POST`) también exige sesión de alumno; sin sesión responde 401.
+Además trae `anonimo`, `prioridad` (`baja|media|alta`) y `resolvedAt`; para el admin, `autor` (null si es anónimo).
 ```json
 [
   {
@@ -209,8 +210,11 @@ Sin `?folios=` regresa **todos** y exige el encabezado `X-Admin-Token` (clave de
 ]
 ```
 
-### `PATCH /api/reportes.php` → panel admin (Avance 2, exige `X-Admin-Token`)
-JSON `{ "folio": "POLI-2026-0001", "estado": "proceso", "comentarioAdmin": "Ya se avisó a mantenimiento" }` → `{ "ok": true }`
+### `PATCH /api/reportes.php` → panel admin (exige sesión de administrador; se manda como `POST ?_method=PATCH`)
+JSON `{ "folio": "POLI-2026-0001", "estado": "proceso", "prioridad": "alta", "comentarioAdmin": "Ya se avisó a mantenimiento" }` (solo lo que cambia).
+
+### `/api/auth.php` → inicio de sesión (Alexis)
+Ver `docs/login.md`: Google, código de 6 dígitos por correo, contraseña del panel e invitado.
 
 ### `GET /api/avisos.php` → Leo
 ```json

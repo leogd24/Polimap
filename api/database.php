@@ -2,8 +2,8 @@
 /**
  * POLIMAP — Conexión a MySQL y funciones comunes de la API.
  *
- * Todos los endpoints (edificios.php, faq.php, reportes.php, avisos.php)
- * empiezan con:  require __DIR__ . '/database.php';
+ * Todos los endpoints (edificios.php, faq.php, reportes.php, avisos.php,
+ * auth.php, accesos.php) empiezan con:  require __DIR__ . '/database.php';
  *
  * Aquí vive lo que se repite:
  *   - leer config.php
@@ -30,13 +30,25 @@ $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 if (in_array($origin, $CONFIG['cors_origins'], true)) {
     header("Access-Control-Allow-Origin: $origin");
     header('Vary: Origin');
-    header('Access-Control-Allow-Methods: GET, POST, PATCH, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type, X-Admin-Token');
+    header('Access-Control-Allow-Methods: GET, POST, PATCH, DELETE, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type');
+    header('Access-Control-Allow-Credentials: true'); // deja pasar la cookie de sesión
 }
 // El navegador manda un OPTIONS antes de PATCH/POST con JSON: se contesta vacío.
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(204);
     exit;
+}
+
+// Protección extra (CSRF): si una petición que CAMBIA datos trae Origin,
+// tiene que venir de este mismo sitio o de la lista de cors_origins.
+if (!in_array($_SERVER['REQUEST_METHOD'], ['GET', 'HEAD'], true) && $origin !== '') {
+    $mismoSitio = parse_url($origin, PHP_URL_HOST) === parse_url('//' . ($_SERVER['HTTP_HOST'] ?? ''), PHP_URL_HOST);
+    if (!$mismoSitio && !in_array($origin, $CONFIG['cors_origins'], true)) {
+        http_response_code(403);
+        echo json_encode(['ok' => false, 'error' => 'Origen no permitido'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
 }
 
 // 3) Respuestas -----------------------------------------------------------
@@ -91,3 +103,27 @@ function int_o_null($v): ?int   { return $v === null ? null : (int) $v; }
 
 /** Convierte "2026-10-05 10:30:00" a ISO "2026-10-05T10:30:00". */
 function iso($fecha): ?string { return $fecha === null ? null : str_replace(' ', 'T', $fecha); }
+
+/** Fecha y hora actual de Guadalajara, lista para MySQL ("2026-10-07 13:05:00"). */
+function ahora(int $sumarSegundos = 0): string { return date('Y-m-d H:i:s', time() + $sumarSegundos); }
+
+// 6) Método HTTP ----------------------------------------------------------
+// Algunos hostings gratuitos bloquean PATCH y DELETE. Por eso el frontend
+// manda POST ?_method=PATCH (o DELETE) y aquí lo tratamos como el real.
+function metodo_http(): string
+{
+    $metodo = $_SERVER['REQUEST_METHOD'];
+    $forzado = strtoupper($_GET['_method'] ?? '');
+    if ($metodo === 'POST' && in_array($forzado, ['PATCH', 'DELETE'], true)) {
+        return $forzado;
+    }
+    return $metodo;
+}
+
+/** Lee el cuerpo JSON de la petición como arreglo (vacío si no hay). */
+function leer_json(): array
+{
+    $datos = json_decode(file_get_contents('php://input'), true);
+    return is_array($datos) ? $datos : [];
+}
+

@@ -14,7 +14,8 @@ function fieldStyle(focused) {
   };
 }
 
-export function TextField({ value, onChange, placeholder, prefixIcon, suffix, filled = true }) {
+/// inputProps (opcional): atributos extra del <input>, ej. { type: 'email', id: 'correo' }.
+export function TextField({ value, onChange, placeholder, prefixIcon, suffix, filled = true, inputProps }) {
   const [focused, setFocused] = useState(false);
 
   return (
@@ -32,6 +33,7 @@ export function TextField({ value, onChange, placeholder, prefixIcon, suffix, fi
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         className="min-w-0 flex-1 bg-transparent px-3 py-4 outline-none placeholder:text-[color:var(--color-text-muted)]"
+        {...inputProps}
       />
       {suffix}
     </div>

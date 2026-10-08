@@ -1,7 +1,7 @@
 // Service worker mínimo: hace la app instalable y la deja abrir sin red.
 // Cambia la versión cada vez que cambien íconos o archivos base, para que
 // los celulares que ya instalaron la app descarguen los nuevos.
-const CACHE = 'polimap-v4';
+const CACHE = 'polimap-v5'; // v5: login e invitado
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.png', '/img/logo-polimap.png', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {

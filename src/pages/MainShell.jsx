@@ -3,6 +3,8 @@ import { colors, alpha } from '../styles/theme.js';
 import Icon from '../components/Icon.jsx';
 import PolimapLogo from '../components/PolimapLogo.jsx';
 import BrandStripe from '../components/BrandStripe.jsx';
+import UserAvatar from '../components/UserAvatar.jsx';
+import AccountSheet from '../components/AccountSheet.jsx';
 import HomeScreen from './HomeScreen.jsx';
 import CampusMapScreen from './CampusMapScreen.jsx';
 import BuildingsScreen from './BuildingsScreen.jsx';
@@ -10,6 +12,7 @@ import ReportScreen from './ReportScreen.jsx';
 import ScheduleScreen from './ScheduleScreen.jsx';
 import BuildingDetailScreen from './BuildingDetailScreen.jsx';
 import AssistantScreen from './AssistantScreen.jsx';
+import LoginRequired from '../components/LoginRequired.jsx';
 
 const titles = ['Inicio', 'Mapa del campus', 'Edificios', 'Reportar', 'Mi horario'];
 
@@ -25,8 +28,13 @@ const destinations = [
 ];
 
 /// Equivalente de screens/main_shell.dart
-export default function MainShell() {
+/// Props (login, Alexis):
+///   user           usuario con sesión, o null si es invitado
+///   onLogout       cerrar sesión
+///   onRequestLogin abrir el inicio de sesión (invitado que quiere reportar)
+export default function MainShell({ user, onLogout, onRequestLogin }) {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [accountOpen, setAccountOpen] = useState(false);
   // Pila de pantallas que se apilan sobre el shell (detalle y asistente).
   const [stack, setStack] = useState([]);
 
@@ -39,7 +47,8 @@ export default function MainShell() {
     <HomeScreen onNavigate={setCurrentIndex} onOpenAssistant={openAssistant} onOpenBuilding={openBuilding} />,
     <CampusMapScreen onOpenBuilding={openBuilding} />,
     <BuildingsScreen onOpenBuilding={openBuilding} />,
-    <ReportScreen />,
+    // Reportar es lo único que pide cuenta: el invitado ve por qué y cómo entrar.
+    user ? <ReportScreen user={user} /> : <LoginRequired onLogin={onRequestLogin} />,
     <ScheduleScreen />,
   ];
 
@@ -59,7 +68,9 @@ export default function MainShell() {
         <PolimapLogo size={38} />
         <div className="ml-3 min-w-0 flex-1">
           <div className="truncate text-xl font-extrabold">{titles[currentIndex]}</div>
-          <div className="text-[11px] font-medium">Escuela Politécnica</div>
+          <div className="text-[11px] font-medium">
+            Escuela Politécnica{user ? '' : ' · Invitado'}
+          </div>
         </div>
         <button
           type="button"
@@ -71,6 +82,33 @@ export default function MainShell() {
         >
           <Icon name="chat_bubble" filled={false} color={colors.white} />
         </button>
+        {/* Invitado: botón para iniciar sesión */}
+        {!user && (
+          <button
+            type="button"
+            onClick={onRequestLogin}
+            title="Iniciar sesión"
+            aria-label="Iniciar sesión"
+            className="tappable ml-2 flex h-10 items-center gap-1 rounded-full border-0 px-3 text-sm font-bold"
+            style={{ backgroundColor: alpha(colors.white, 0.16), color: colors.white }}
+          >
+            <Icon name="login" size={20} color={colors.white} />
+            <span className="hidden min-[380px]:inline">Entrar</span>
+          </button>
+        )}
+        {/* Foto de la cuenta de Google: abre la hoja con "Cerrar sesión" */}
+        {user && (
+          <button
+            type="button"
+            onClick={() => setAccountOpen(true)}
+            title="Tu cuenta"
+            aria-label="Tu cuenta"
+            className="tappable ml-2 flex items-center justify-center rounded-full border-0 bg-transparent p-0"
+            style={{ width: 44, height: 44 }}
+          >
+            <UserAvatar user={user} size={36} ring={alpha(colors.white, 0.7)} />
+          </button>
+        )}
       </header>
       {/* Franja con los 5 colores oficiales del Politécnico */}
       <BrandStripe height={4} />
@@ -137,6 +175,10 @@ export default function MainShell() {
         <BuildingDetailScreen building={top.building} onBack={pop} />
       )}
       {top && top.type === 'assistant' && <AssistantScreen onBack={pop} />}
+
+      {accountOpen && (
+        <AccountSheet user={user} onClose={() => setAccountOpen(false)} onLogout={onLogout} />
+      )}
     </div>
   );
 }
