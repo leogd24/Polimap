@@ -9,6 +9,8 @@ import Dialog from '../components/Dialog.jsx';
 import { SelectField, TextArea, Switch } from '../components/Inputs.jsx';
 import { createReport, getSimilarReports, supportReport } from '../lib/api.js';
 import { compressImage, formatBytes } from '../lib/compressImage.js';
+// Límites del campus que afinó Marcos (los mismos del mapa): así hay una sola fuente.
+import { CAMPUS } from '../components/CampusMap.jsx';
 import SimilarReports from '../components/SimilarReports.jsx';
 
 // value = clave de la base de datos (docs/contrato-datos.md), label = lo que se ve.
@@ -21,6 +23,19 @@ const categories = [
   { value: 'riesgo', label: 'Riesgo o desperfecto' },
   { value: 'otro', label: 'Otro' },
 ];
+
+// Mensajes del GPS: los mismos que usa el mapa (CampusMap.jsx), para que la app hable igual.
+const gpsErrors = {
+  1: 'Negaste el permiso de ubicación. Actívalo en el candado de la barra de direcciones y vuelve a intentar.',
+  2: 'No se pudo obtener tu ubicación. Revisa que el GPS esté encendido.',
+  3: 'El GPS está tardando. Intenta en un lugar abierto.',
+};
+
+/** ¿La coordenada cae dentro del rectángulo del campus? (solo para avisar, no bloquea) */
+function insideCampus(lat, lng) {
+  const [[south, west], [north, east]] = CAMPUS.limites;
+  return lat >= south && lat <= north && lng >= west && lng <= east;
+}
 
 const locationOptions = [
   ...campusBuildings.map((building) => ({
@@ -42,6 +57,10 @@ export default function ReportScreen({ user }) {
   // Foto elegida: { file, url }. `file` es lo que se enviará al servidor (paso 2)
   // y `url` es una dirección temporal para mostrar la miniatura.
   const [photo, setPhoto] = useState(null);
+  // GPS (opcional). gps = { lat, lng, accuracy } cuando ya se obtuvo.
+  const [gps, setGps] = useState(null);
+  const [gpsLoading, setGpsLoading] = useState(false);
+  const [gpsError, setGpsError] = useState('');
   // true mientras se achica la foto (tarda menos de un segundo en la mayoría de celulares).
   const [compressing, setCompressing] = useState(false);
   // Dos <input type="file"> escondidos: uno abre directo la cámara y otro la galería.
@@ -106,6 +125,40 @@ export default function ReportScreen({ user }) {
     }
   };
 
+  // Pide la ubicación UNA vez, solo cuando el alumno toca el botón.
+  // (El navegador muestra su propio aviso de permiso; nunca lo pedimos solos.)
+  const requestGps = () => {
+    setGpsError('');
+    // Paso 1: el GPS solo existe en páginas seguras (https o localhost).
+    if (!window.isSecureContext) {
+      setGpsError('La ubicación solo funciona en https o en localhost.');
+      return;
+    }
+    if (!('geolocation' in navigator)) {
+      setGpsError('Tu navegador no permite obtener la ubicación.');
+      return;
+    }
+    // Paso 2: pedir la posición. Si el alumno dice que no, cae en el error 1.
+    setGpsLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setGps({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy, // radio de error en metros
+        });
+        setGpsLoading(false);
+      },
+      (error) => {
+        setGpsError(gpsErrors[error.code] ?? 'Error de ubicación.');
+        setGpsLoading(false);
+      },
+      // Alta precisión (usa el GPS real), máximo 15 s de espera,
+      // y acepta una posición de hasta 30 s de antigüedad.
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
+    );
+  };
+
   const support = async (folio) => {
     setSupporting(folio);
     try {
@@ -150,6 +203,12 @@ export default function ReportScreen({ user }) {
     data.append('anonimo', anonymous ? '1' : '0');
     // Foto (opcional): ya va comprimida. El servidor la guarda en api/uploads/.
     if (photo) data.append('foto', photo.file);
+    // GPS (opcional): 6 decimales ≈ 10 cm, es lo que guarda la columna DECIMAL(9,6).
+    if (gps) {
+      data.append('lat', gps.lat.toFixed(6));
+      data.append('lng', gps.lng.toFixed(6));
+      data.append('precision_m', String(Math.round(gps.accuracy)));
+    }
 
     setSending(true);
     try {
@@ -180,6 +239,8 @@ export default function ReportScreen({ user }) {
     setLocation(null);
     setAnonymous(true);
     setPhoto(null);
+    setGps(null);
+    setGpsError('');
     setDescription('');
     setErrors({});
     setSimilar([]);
@@ -230,6 +291,64 @@ export default function ReportScreen({ user }) {
           options={locationOptions}
           error={errors.location}
         />
+      </div>
+
+      {/* GPS opcional: ayuda a ubicar el problema exacto dentro del edificio o zona */}
+      <div className="mt-[9px]">
+        {gps ? (
+          // Ya hay ubicación: la mostramos con su precisión y opción de quitarla.
+          <div
+            className="flex items-center justify-between px-3 py-2"
+            style={{
+              backgroundColor: colors.greenTint,
+              borderRadius: 'var(--radius-tile)',
+              border: `1px solid ${colors.green}`,
+            }}
+          >
+            <span className="flex flex-col">
+              <span className="flex items-center font-extrabold" style={{ color: colors.greenDark }}>
+                <Icon name="my_location" size={20} color={colors.greenDark} />
+                <span className="ml-1">Ubicación agregada · ±{Math.round(gps.accuracy)} m</span>
+              </span>
+              {!insideCampus(gps.lat, gps.lng) && (
+                <span className="mt-[2px] text-xs" style={{ color: colors.textSecondary }}>
+                  Parece que no estás en el campus. Se enviará de todos modos.
+                </span>
+              )}
+            </span>
+            <button
+              type="button"
+              onClick={() => setGps(null)}
+              className="tappable flex items-center gap-1 px-2 py-1 font-bold"
+              style={{ color: colors.crimson }}
+            >
+              <Icon name="delete" size={18} color={colors.crimson} />
+              Quitar
+            </button>
+          </div>
+        ) : (
+          // Sin ubicación: botón para pedirla (o aviso mientras se obtiene).
+          <button
+            type="button"
+            onClick={requestGps}
+            disabled={gpsLoading}
+            className="tappable flex w-full items-center justify-center gap-2 px-3 py-[10px] font-bold"
+            style={{
+              backgroundColor: colors.surface,
+              color: colors.blue,
+              borderRadius: 'var(--radius-tile)',
+              border: `1px dashed ${gpsError ? colors.crimson : colors.border}`,
+            }}
+          >
+            <Icon name={gpsLoading ? 'hourglass_top' : 'add_location_alt'} size={20} color={colors.blue} />
+            {gpsLoading ? 'Obteniendo ubicación…' : 'Agregar mi ubicación GPS (opcional)'}
+          </button>
+        )}
+        {gpsError && (
+          <p className="m-0 mt-1 text-xs font-bold" style={{ color: colors.crimson }}>
+            {gpsError}
+          </p>
+        )}
       </div>
 
       <SimilarReports reports={similar} onSupport={support} busy={supporting} />
