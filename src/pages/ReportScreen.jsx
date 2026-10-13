@@ -8,6 +8,7 @@ import FilledButton from '../components/FilledButton.jsx';
 import Dialog from '../components/Dialog.jsx';
 import { SelectField, TextArea, Switch } from '../components/Inputs.jsx';
 import { createReport, getSimilarReports, supportReport } from '../lib/api.js';
+import { compressImage, formatBytes } from '../lib/compressImage.js';
 import SimilarReports from '../components/SimilarReports.jsx';
 
 // value = clave de la base de datos (docs/contrato-datos.md), label = lo que se ve.
@@ -41,6 +42,8 @@ export default function ReportScreen({ user }) {
   // Foto elegida: { file, url }. `file` es lo que se enviará al servidor (paso 2)
   // y `url` es una dirección temporal para mostrar la miniatura.
   const [photo, setPhoto] = useState(null);
+  // true mientras se achica la foto (tarda menos de un segundo en la mayoría de celulares).
+  const [compressing, setCompressing] = useState(false);
   // Dos <input type="file"> escondidos: uno abre directo la cámara y otro la galería.
   // (En Android reciente, un solo input se va directo a la galería sin ofrecer cámara.)
   const cameraInput = useRef(null);
@@ -77,7 +80,8 @@ export default function ReportScreen({ user }) {
   }, [photo]);
 
   // Se ejecuta cuando el alumno toma o elige una foto.
-  const pickPhoto = (event) => {
+  // Paso 2: antes de guardarla, la achicamos con compressImage() (src/lib/compressImage.js).
+  const pickPhoto = async (event) => {
     const file = event.target.files?.[0];
     // Vaciamos el input para que, si vuelve a elegir la misma foto, también se detecte.
     event.target.value = '';
@@ -88,7 +92,18 @@ export default function ReportScreen({ user }) {
       return;
     }
     setErrors((prev) => ({ ...prev, photo: undefined }));
-    setPhoto({ file, url: URL.createObjectURL(file) });
+
+    setCompressing(true);
+    try {
+      const small = await compressImage(file);
+      // Para probar: en la consola (F12) se ve cuánto pesaba y cuánto pesa ahora.
+      console.info(`[foto] ${formatBytes(file.size)} → ${formatBytes(small.size)}`);
+      setPhoto({ file: small, url: URL.createObjectURL(small) });
+    } catch (error) {
+      setErrors((prev) => ({ ...prev, photo: error.message }));
+    } finally {
+      setCompressing(false);
+    }
   };
 
   const support = async (folio) => {
@@ -124,7 +139,7 @@ export default function ReportScreen({ user }) {
   };
 
   const submit = async () => {
-    if (!validate() || sending) return;
+    if (!validate() || sending || compressing) return;
 
     // FormData con los campos del contrato (api/reportes.php).
     const data = new FormData();
@@ -133,6 +148,8 @@ export default function ReportScreen({ user }) {
     if (location.startsWith('Edificio ')) data.append('edificio_number', location.replace('Edificio ', ''));
     else data.append('zona', location);
     data.append('anonimo', anonymous ? '1' : '0');
+    // Foto (opcional): ya va comprimida. El servidor la guarda en api/uploads/.
+    if (photo) data.append('foto', photo.file);
 
     setSending(true);
     try {
@@ -260,7 +277,8 @@ export default function ReportScreen({ user }) {
             <div className="flex items-center justify-between px-3 py-2">
               <span className="flex items-center font-extrabold" style={{ color: colors.goldDark }}>
                 <Icon name="check_circle" size={20} color={colors.goldDark} />
-                <span className="ml-1">Fotografía agregada</span>
+                {/* Mostramos el peso final para comprobar que sí se comprimió */}
+                <span className="ml-1">Fotografía agregada · {formatBytes(photo.file.size)}</span>
               </span>
               <button
                 type="button"
@@ -283,11 +301,17 @@ export default function ReportScreen({ user }) {
               border: `1px solid ${errors.photo ? colors.crimson : colors.border}`,
             }}
           >
-            <Icon name="add_a_photo" filled={false} size={34} color={colors.textSecondary} />
+            <Icon
+              name={compressing ? 'hourglass_top' : 'add_a_photo'}
+              filled={false}
+              size={34}
+              color={colors.textSecondary}
+            />
             <span className="mt-2 text-xs" style={{ color: colors.textMuted }}>
-              Opcional · ayuda a encontrar el problema más rápido
+              {compressing ? 'Preparando foto…' : 'Opcional · ayuda a encontrar el problema más rápido'}
             </span>
-            <div className="mt-3 grid w-full grid-cols-2 gap-3">
+            {/* Mientras se comprime, escondemos los botones para no elegir dos fotos a la vez */}
+            <div className={`mt-3 grid w-full grid-cols-2 gap-3 ${compressing ? 'invisible' : ''}`}>
               <FilledButton
                 icon="photo_camera"
                 background={colors.blue}
