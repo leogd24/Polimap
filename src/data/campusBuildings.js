@@ -87,23 +87,30 @@ export const campusBuildings = [
   {
     number: 2,
     name: 'Edificio 2',
-    summary: '',
-    description: '',
-    services: [],
-    spaces: [],
+    summary: 'Biblioteca y auditorio',
+    description:
+      'Aquí está la biblioteca. En la planta de arriba está el auditorio.',
+    services: ['Biblioteca', 'Auditorio'],
+    spaces: ['Biblioteca', 'Planta alta: auditorio'],
     hours: '',
     accessibility: '',
     icon: 'apartment',
     color: colors.blueLight,
-    procedures: [],
+    procedures: [
+      {
+        name: 'Entrar a la biblioteca',
+        details: 'Te piden tu credencial de la UdeG para ingresar.',
+      },
+    ],
   },
   {
     number: 3,
     name: 'Edificio 3',
-    summary: 'Préstamo de cable HDMI',
-    description: '',
-    services: ['Préstamo de cable HDMI'],
-    spaces: [],
+    summary: 'Préstamo de equipo: cable HDMI, computadoras y balones',
+    description:
+      'En el segundo piso, del lado derecho, se prestan cables HDMI, computadoras y balones para jugar.',
+    services: ['Préstamo de cable HDMI', 'Préstamo de computadoras', 'Préstamo de balones'],
+    spaces: ['Segundo piso, lado derecho: préstamo de equipo'],
     hours: '',
     accessibility: '',
     icon: 'cable',
@@ -114,15 +121,25 @@ export const campusBuildings = [
         details:
           'En el segundo piso, del lado derecho. Preséntate con tu credencial del Poli.',
       },
+      {
+        name: 'Préstamo de computadoras',
+        details:
+          'En el segundo piso, del lado derecho. Preséntate con tu credencial del Poli.',
+      },
+      {
+        name: 'Préstamo de balones',
+        details:
+          'En el segundo piso, del lado derecho. Preséntate con tu credencial del Poli.',
+      },
     ],
   },
   {
     number: 4,
     name: 'Edificio 4',
-    summary: '',
-    description: '',
+    summary: 'Aulas y bodega',
+    description: 'Edificio de aulas. Aquí también está la bodega del plantel.',
     services: [],
-    spaces: [],
+    spaces: ['Aulas', 'Bodega'],
     hours: '',
     accessibility: '',
     icon: 'apartment',
@@ -168,10 +185,10 @@ export const campusBuildings = [
   {
     number: 6,
     name: 'Edificio 6',
-    summary: '',
-    description: '',
+    summary: 'Aulas y laboratorios',
+    description: 'Edificio de aulas y laboratorios.',
     services: [],
-    spaces: [],
+    spaces: ['Aulas', 'Laboratorios'],
     hours: '',
     accessibility: '',
     icon: 'apartment',
@@ -181,10 +198,13 @@ export const campusBuildings = [
   {
     number: 7,
     name: 'Edificio 7',
-    summary: 'Sistema de internet del plantel',
-    description: '',
+    summary: 'Aulas, laboratorios y sistema de internet del plantel',
+    description:
+      'Edificio de aulas y laboratorios. En el segundo piso está el sistema de internet del Poli.',
     services: ['Sistema de internet'],
     spaces: [
+      'Aulas',
+      'Laboratorios',
       'Segundo piso: sistema de internet del plantel',
       'Oficina del maestro a cargo del internet',
     ],
@@ -203,10 +223,17 @@ export const campusBuildings = [
   {
     number: 8,
     name: 'Edificio 8',
-    summary: '',
-    description: '',
-    services: [],
-    spaces: [],
+    summary: 'Estudio de audio y video, laboratorios y oficinas de departamento',
+    description:
+      'Aquí están el estudio de audio y video, el laboratorio de sistemas híbridos, el taller de energía eólica y las oficinas de los departamentos de Computación y de Telecomunicaciones y Energías Alternas.',
+    services: ['Estudio de audio y video'],
+    spaces: [
+      'Estudio de audio y video',
+      'Laboratorio de sistemas híbridos',
+      'Taller de energía eólica',
+      'Oficina del Departamento de Computación',
+      'Oficina del Departamento de Telecomunicaciones y Energías Alternas',
+    ],
     hours: '',
     accessibility: '',
     icon: 'apartment',
@@ -216,10 +243,16 @@ export const campusBuildings = [
   {
     number: 9,
     name: 'Edificio 9',
-    summary: '',
-    description: '',
+    summary: 'Talleres de manufactura y laboratorio de producción',
+    description:
+      'Aquí están los talleres de soldadura, máquinas y herramientas y metrología, y el laboratorio de sistemas de producción y control de calidad.',
     services: [],
-    spaces: [],
+    spaces: [
+      'Taller de soldadura',
+      'Taller de máquinas y herramientas',
+      'Taller de metrología',
+      'Laboratorio de sistemas de producción y control de calidad',
+    ],
     hours: '',
     accessibility: '',
     icon: 'apartment',
@@ -229,10 +262,16 @@ export const campusBuildings = [
   {
     number: 10,
     name: 'Edificio 10',
-    summary: '',
-    description: '',
+    summary: 'Laboratorios de biotecnología y alimentos',
+    description:
+      'Aquí están los laboratorios de biorremediación, fermentación, in vitro y alimentos.',
     services: [],
-    spaces: [],
+    spaces: [
+      'Laboratorio de biorremediación',
+      'Laboratorio de fermentación',
+      'Laboratorio de in vitro',
+      'Laboratorio de alimentos',
+    ],
     hours: '',
     accessibility: '',
     icon: 'apartment',
