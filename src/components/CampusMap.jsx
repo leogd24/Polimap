@@ -652,7 +652,10 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
                   <Polygon
                     key={`p${i}`}
                     positions={pared}
-                    pathOptions={{ className: `pm-3d-pared ${clase}`, bubblingMouseEvents: false }}
+                    // className va DIRECTO (no dentro de pathOptions): Leaflet solo pone
+                    // la clase al crear la figura; si llega después, se queda azul por defecto.
+                    className={`pm-3d-pared ${clase}`}
+                    bubblingMouseEvents={false}
                     eventHandlers={alTocar}
                   />
                 ))}
@@ -660,7 +663,8 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
                   <Polygon
                     key={`t${i}`}
                     positions={caja.techo}
-                    pathOptions={{ className: `pm-3d-techo ${clase}`, bubblingMouseEvents: false }}
+                    className={`pm-3d-techo ${clase}`}
+                    bubblingMouseEvents={false}
                     eventHandlers={alTocar}
                   />
                 ))}
