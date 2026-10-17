@@ -42,10 +42,25 @@ export default function MainShell({ user, onLogout, onRequestLogin }) {
   const openBuilding = (building) => setStack((previous) => [...previous, { type: 'detail', building }]);
   const pop = () => setStack((previous) => previous.slice(0, -1));
 
+  // Asistente → "Ver en el mapa": cierra el asistente, abre la pestaña Mapa
+  // y le dice qué edificio enfocar. `vez` cambia en cada clic para que el mapa
+  // reaccione aunque se pida el mismo edificio dos veces seguidas.
+  const [mapFocus, setMapFocus] = useState(null);
+  const showOnMap = (number) => {
+    setStack([]);
+    setCurrentIndex(1);
+    setMapFocus({ number, vez: Date.now() });
+  };
+  // Asistente → "Ir a Mi horario" / "Ir a Reportar"
+  const goToTab = (index) => {
+    setStack([]);
+    setCurrentIndex(index);
+  };
+
   // IndexedStack: las cinco pantallas se mantienen montadas y conservan su estado.
   const pages = [
     <HomeScreen onNavigate={setCurrentIndex} onOpenAssistant={openAssistant} onOpenBuilding={openBuilding} />,
-    <CampusMapScreen onOpenBuilding={openBuilding} />,
+    <CampusMapScreen onOpenBuilding={openBuilding} focus={mapFocus} />,
     <BuildingsScreen onOpenBuilding={openBuilding} />,
     // Reportar es lo único que pide cuenta: el invitado ve por qué y cómo entrar.
     user ? <ReportScreen user={user} /> : <LoginRequired onLogin={onRequestLogin} />,
@@ -174,7 +189,9 @@ export default function MainShell({ user, onLogout, onRequestLogin }) {
       {top && top.type === 'detail' && (
         <BuildingDetailScreen building={top.building} onBack={pop} />
       )}
-      {top && top.type === 'assistant' && <AssistantScreen onBack={pop} />}
+      {top && top.type === 'assistant' && (
+        <AssistantScreen onBack={pop} onShowOnMap={showOnMap} onNavigate={goToTab} />
+      )}
 
       {accountOpen && (
         <AccountSheet user={user} onClose={() => setAccountOpen(false)} onLogout={onLogout} />

@@ -69,7 +69,7 @@ export default function HomeScreen({ onNavigate, onOpenAssistant, onOpenBuilding
           icon="badge"
           title="Control Escolar"
           color={colors.crimson}
-          onTap={() => onOpenBuilding(campusBuildings[5])}
+          onTap={() => onOpenBuilding(campusBuildings.find((b) => b.number === 1))}
         />
         <QuickActionCard
           icon="add_alert"
