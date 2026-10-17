@@ -9,12 +9,14 @@
 //   3. Al tocar un marcador abre una hoja inferior (bottom sheet) tipo Google Maps.
 //   4. Botón dorado "Mi ubicación": GPS en tiempo real con punto azul que pulsa.
 //   5. Botón "Cómo llegar": traza una línea desde tu ubicación hasta el edificio.
+//   6. Edificios en 3D (cajitas con relieve) y pines 3D con brinco al tocarlos.
+//   7. Si estás fuera del Poli: el mapa se pinta de rojo 4 s con un aviso al centro.
 //
 // Dependencias (una sola vez):  npm install leaflet@1.9 react-leaflet@4
 // =====================================================================
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Polyline, useMap, useMapEvents } from 'react-leaflet';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { MapContainer, TileLayer, Marker, Polygon, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -68,6 +70,47 @@ export const COORDENADAS_EDIFICIOS = {
   10: [20.747956, -103.38025],
 };
 
+// ---------------------------------------------------------------------
+// PASO 2b. Edificios en 3D
+// ---------------------------------------------------------------------
+// Cada edificio se dibuja como una cajita: la "planta" (rectángulo en el piso),
+// las paredes y el techo levantado. Las medidas van en METROS.
+//   largo → de izquierda a derecha (oeste-este)
+//   fondo → de abajo hacia arriba (sur-norte)
+//   pisos → cuántos pisos tiene (hace la cajita más alta)
+//   giro  → grados para girar el rectángulo si el edificio está chueco
+// Todos usan MEDIDAS_3D_DEFECTO, salvo los que pongas en MEDIDAS_3D.
+const MEDIDAS_3D_DEFECTO = { largo: 38, fondo: 11, pisos: 2, giro: 0 };
+// Ejemplo para ajustar uno:  4: { largo: 45, pisos: 3 },
+//
+// EDIFICIOS CON FORMA RARA (como el 2): se arman con varias cajitas pegadas
+// usando `partes`. Cada parte tiene su largo y fondo, y se recorre con:
+//   este  → metros a la derecha (+) o a la izquierda (-) del punto del edificio
+//   norte → metros hacia arriba (+) o hacia abajo (-)
+// El giro y los pisos se comparten entre todas las partes.
+const MEDIDAS_3D = {
+  1: { giro: -8 },
+  2: {
+    giro: -9,
+    partes: [
+      { largo: 30, fondo: 14, este: -5, norte: 0 }, // bloque grande
+      { largo: 10, fondo: 10, este: 15, norte: 1 }, // bloque chico (derecha)
+    ],
+  },
+  3: { giro: -10 },
+  4: { giro: -10 },
+  5: { giro: -10 },
+  6: { giro: -4 },
+  7: { giro: -10 },
+  8: { giro: -8 },
+  9: { largo: 32, fondo: 17, giro: -9 },
+  10: { largo: 32, fondo: 17, giro: -9 },
+};
+const METROS_POR_PISO = 3.5;
+// Hacia dónde "sube" el techo para dar el efecto 3D (perspectiva).
+// norte: qué tanto sube; este: qué tanto se ladea a la derecha.
+const PERSPECTIVA = { norte: 0.55, este: 0.15 };
+
 // Tamaño de los marcadores de edificio (círculo con el número), en píxeles.
 // ⬇️ CAMBIA SOLO ESTE NÚMERO para hacerlos más chicos o más grandes (antes era 36).
 const TAMANO_PIN = 28;
@@ -109,13 +152,65 @@ function leerModoDemo() {
   return { lat: CAMPUS.centro[0], lng: CAMPUS.centro[1] };
 }
 
-// Marcador de edificio: círculo con el número y una "colita" hacia abajo.
+// Mueve un punto [lat, lng] cierta cantidad de metros al este y al norte.
+function moverMetros([lat, lng], este, norte) {
+  const metrosPorGrado = 111320;
+  return [
+    lat + norte / metrosPorGrado,
+    lng + este / (metrosPorGrado * Math.cos((lat * Math.PI) / 180)),
+  ];
+}
+
+// Calcula los puntos de las cajitas 3D de un edificio.
+// Regresa: cajas (cada una con piso, techo y paredes) y cima (donde va el pin).
+function geometria3D(numero, centro) {
+  const m = { ...MEDIDAS_3D_DEFECTO, ...MEDIDAS_3D[numero] };
+  const giro = (m.giro * Math.PI) / 180;
+  const altura = m.pisos * METROS_POR_PISO;
+  // El techo es el mismo rectángulo, recorrido hacia "arriba" según la altura.
+  const subeEste = altura * PERSPECTIVA.este;
+  const subeNorte = altura * PERSPECTIVA.norte;
+  const girar = ([x, y]) => [x * Math.cos(giro) - y * Math.sin(giro), x * Math.sin(giro) + y * Math.cos(giro)];
+
+  // Si no tiene `partes`, es una sola cajita con el largo y fondo normales.
+  const partes = m.partes ?? [{ largo: m.largo, fondo: m.fondo, este: 0, norte: 0 }];
+
+  const cajas = partes.map((parte) => {
+    const cx = parte.este ?? 0;
+    const cy = parte.norte ?? 0;
+    // Esquinas del rectángulo (en metros desde el punto del edificio), ya giradas.
+    const esquinas = [
+      [cx - parte.largo / 2, cy - parte.fondo / 2],
+      [cx + parte.largo / 2, cy - parte.fondo / 2],
+      [cx + parte.largo / 2, cy + parte.fondo / 2],
+      [cx - parte.largo / 2, cy + parte.fondo / 2],
+    ].map(girar);
+    const piso = esquinas.map(([x, y]) => moverMetros(centro, x, y));
+    const techo = esquinas.map(([x, y]) => moverMetros(centro, x + subeEste, y + subeNorte));
+    // Cada pared une un lado del piso con el mismo lado del techo.
+    const paredes = piso.map((p, k) => {
+      const l = (k + 1) % 4;
+      return [p, piso[l], techo[l], techo[k]];
+    });
+    return { piso, techo, paredes };
+  });
+
+  const cima = moverMetros(centro, subeEste, subeNorte);
+  return { cajas, cima };
+}
+
+// Marcador 3D: bolita con relieve, número, colita, sombra en el piso
+// y una "onda" dorada que sale cuando está activo.
 function iconoEdificio(numero, activo) {
   return L.divIcon({
     className: 'pm-pin-wrap', // reemplaza el estilo por defecto de Leaflet
-    html: `<div class="pm-pin${activo ? ' is-active' : ''}"><span>${numero}</span></div>`,
-    iconSize: [TAMANO_PIN, TAMANO_PIN + 8],
-    iconAnchor: [TAMANO_PIN / 2, TAMANO_PIN + 6], // la punta de la colita toca la coordenada
+    html: `<div class="pm-pin${activo ? ' is-active' : ''}">
+        <span class="pm-pin__onda"></span>
+        <span class="pm-pin__sombra"></span>
+        <span class="pm-pin__cuerpo"><span>${numero}</span></span>
+      </div>`,
+    iconSize: [TAMANO_PIN, TAMANO_PIN + 10],
+    iconAnchor: [TAMANO_PIN / 2, TAMANO_PIN + 6], // la punta de la colita toca el techo
   });
 }
 
@@ -228,10 +323,12 @@ function UbicacionUsuario({ posicion }) {
 // ---------------------------------------------------------------------
 // Props:
 //   focusNumber    → (opcional) número de edificio a abrir al entrar.
-//                    Sirve para el botón "Ver en el mapa" de Gabo.
+//                    Sirve para el botón "Ver en el mapa" del asistente.
+//   focusKey       → (opcional) cambia en cada clic de "Ver en el mapa" para que
+//                    se vuelva a abrir aunque sea el mismo edificio.
 //   onOpenBuilding → (opcional) función(numero) para abrir la ficha completa.
 //   alto           → alto del mapa. Por defecto toda la pantalla.
-export default function CampusMap({ focusNumber = null, onOpenBuilding, alto = '100dvh' }) {
+export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding, alto = '100dvh' }) {
   const mapaRef = useRef(null);
   const hojaRef = useRef(null);
   const watchIdRef = useRef(null);
@@ -240,6 +337,9 @@ export default function CampusMap({ focusNumber = null, onOpenBuilding, alto = '
   const rutaAjustadaRef = useRef(false);
   const timerAvisoRef = useRef(null);
   const ultimoSeleccionadoRef = useRef(null);
+  const seleccionadoNumRef = useRef(null);
+  const timerCambioRef = useRef(null);
+  const timerFueraRef = useRef(null);
 
   const [edificios, setEdificios] = useState([]);
   const [seleccionadoNum, setSeleccionadoNum] = useState(null);
@@ -248,6 +348,8 @@ export default function CampusMap({ focusNumber = null, onOpenBuilding, alto = '
   const [rutaActiva, setRutaActiva] = useState(false);
   const [aviso, setAviso] = useState(null); // {texto, tipo: 'info'|'ok'|'error'}
   const [alturaHoja, setAlturaHoja] = useState(0);
+  const [alertaFuera, setAlertaFuera] = useState(false); // mapa en rojo 4 s
+  seleccionadoNumRef.current = seleccionadoNum;
 
   const demo = useMemo(leerModoDemo, []);
 
@@ -276,7 +378,8 @@ export default function CampusMap({ focusNumber = null, onOpenBuilding, alto = '
               b.entrance?.lat != null
                 ? [Number(b.entrance.lat), Number(b.entrance.lng)]
                 : coords;
-            return { ...b, coords, entrada };
+            const geo = geometria3D(b.number, coords);
+            return { ...b, coords, entrada, geo };
           })
           .filter(Boolean);
         setEdificios(conCoordenadas);
@@ -287,10 +390,30 @@ export default function CampusMap({ focusNumber = null, onOpenBuilding, alto = '
     };
   }, [mostrarAviso]);
 
-  // --- 5.2 Abrir un edificio desde fuera (botón "Ver en el mapa") ---
+  // --- 5.2 Abrir / cerrar la hoja ---
+  // Si ya hay un edificio abierto y tocas OTRO, la hoja primero se cierra
+  // y 0.3 s después se vuelve a abrir con el nuevo (así se nota el cambio).
+  const elegirEdificio = useCallback((numero) => {
+    clearTimeout(timerCambioRef.current);
+    setRutaActiva(false);
+    const actual = seleccionadoNumRef.current;
+    if (actual != null && actual !== numero) {
+      setSeleccionadoNum(null);
+      timerCambioRef.current = setTimeout(() => setSeleccionadoNum(numero), 300);
+    } else {
+      setSeleccionadoNum(numero);
+    }
+  }, []);
+  const cerrarHoja = useCallback(() => {
+    clearTimeout(timerCambioRef.current);
+    setRutaActiva(false);
+    setSeleccionadoNum(null);
+  }, []);
+
+  // Abrir un edificio desde el asistente (botón "Ver en el mapa").
   useEffect(() => {
-    if (focusNumber != null) setSeleccionadoNum(Number(focusNumber));
-  }, [focusNumber]);
+    if (focusNumber != null) elegirEdificio(Number(focusNumber));
+  }, [focusNumber, focusKey, elegirEdificio]);
 
   const seleccionado = edificios.find((b) => b.number === seleccionadoNum) ?? null;
   if (seleccionado) ultimoSeleccionadoRef.current = seleccionado;
@@ -317,11 +440,32 @@ export default function CampusMap({ focusNumber = null, onOpenBuilding, alto = '
     const id = requestAnimationFrame(() => {
       const zoom = Math.max(mapa.getZoom(), 18);
       const altoHoja = hojaRef.current?.offsetHeight ?? 0;
-      const punto = mapa.project(edificio.coords, zoom).add([0, altoHoja / 2]);
+      const punto = mapa.project(edificio.geo.cima, zoom).add([0, altoHoja / 2]);
       mapa.flyTo(mapa.unproject(punto, zoom), zoom, { duration: 0.6 });
     });
     return () => cancelAnimationFrame(id);
   }, [numeroElegido, edificios]);
+
+  const detenerUbicacion = useCallback(() => {
+    if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+    watchIdRef.current = null;
+    estadoCampusRef.current = null;
+    setRastreando(false);
+    setPosicion(null);
+  }, []);
+
+  // Fuera del Poli: apaga el GPS, pinta el mapa de rojo con un aviso al centro
+  // y a los 4 segundos todo vuelve a la normalidad.
+  const avisarFuera = useCallback(() => {
+    detenerUbicacion();
+    setRutaActiva(false);
+    centrarAlLlegarRef.current = false;
+    clearTimeout(timerAvisoRef.current);
+    setAviso(null);
+    clearTimeout(timerFueraRef.current);
+    setAlertaFuera(true);
+    timerFueraRef.current = setTimeout(() => setAlertaFuera(false), 4000);
+  }, [detenerUbicacion]);
 
   // --- 5.5 Recibir una lectura del GPS ---
   const recibirPosicion = useCallback(
@@ -337,25 +481,14 @@ export default function CampusMap({ focusNumber = null, onOpenBuilding, alto = '
           const mapa = mapaRef.current;
           mapa?.flyTo([lat, lng], Math.max(mapa.getZoom(), 18), { duration: 0.6 });
         }
+        estadoCampusRef.current = 'dentro';
       } else {
-        // Fuera del campus no se dibuja el punto (el mapa está limitado al Poli).
-        setPosicion(null);
-        if (estadoCampusRef.current !== 'fuera') {
-          mostrarAviso('Estás fuera del campus. El mapa solo muestra el Poli.', 'info', 6000);
-        }
+        // Fuera del campus: no se dibuja el punto y sale la alerta roja.
+        avisarFuera();
       }
-      estadoCampusRef.current = dentro ? 'dentro' : 'fuera';
     },
-    [demo, mostrarAviso],
+    [demo, mostrarAviso, avisarFuera],
   );
-
-  const detenerUbicacion = useCallback(() => {
-    if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
-    watchIdRef.current = null;
-    estadoCampusRef.current = null;
-    setRastreando(false);
-    setPosicion(null);
-  }, []);
 
   // --- 5.6 Encender el GPS (solo cuando el usuario lo pide) ---
   const iniciarUbicacion = useCallback(() => {
@@ -397,6 +530,8 @@ export default function CampusMap({ focusNumber = null, onOpenBuilding, alto = '
     () => () => {
       if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
       clearTimeout(timerAvisoRef.current);
+      clearTimeout(timerCambioRef.current);
+      clearTimeout(timerFueraRef.current);
     },
     [],
   );
@@ -443,16 +578,6 @@ export default function CampusMap({ focusNumber = null, onOpenBuilding, alto = '
     });
   }, [rutaActiva, posicion, seleccionado, alturaHoja]);
 
-  // --- 5.9 Abrir / cerrar la hoja ---
-  const elegirEdificio = (numero) => {
-    setRutaActiva(false);
-    setSeleccionadoNum(numero);
-  };
-  const cerrarHoja = useCallback(() => {
-    setRutaActiva(false);
-    setSeleccionadoNum(null);
-  }, []);
-
   // Distancia en línea recta y minutos estimados caminando.
   const distancia =
     posicion && contenidoHoja
@@ -475,9 +600,14 @@ export default function CampusMap({ focusNumber = null, onOpenBuilding, alto = '
         '--pm-carmesi': colors.crimson,
         '--pm-oro': colors.gold,
         '--pm-pin': `${TAMANO_PIN}px`,
+        '--pm-sombra': colors.blueDeep,
       }}
     >
       <style>{ESTILOS}</style>
+      {/* Color de cada edificio 3D (sale de campusBuildings.js → color) */}
+      <style>
+        {edificios.map((b) => `.pm-3d--${b.number}{--c:${b.color ?? colors.blue}}`).join('')}
+      </style>
 
       {/* Mapa */}
       <MapContainer
@@ -505,11 +635,44 @@ export default function CampusMap({ focusNumber = null, onOpenBuilding, alto = '
         <ControlMapa onTocarMapa={cerrarHoja} />
         <UbicacionUsuario posicion={posicion} />
 
-        {/* Un marcador por edificio */}
+        {/* Edificios en 3D. Se dibujan de arriba (norte) hacia abajo para que
+            los de enfrente tapen a los de atrás, como en la vida real. */}
+        {[...edificios]
+          .sort((a, b) => b.coords[0] - a.coords[0])
+          .map((b) => {
+            const activo = b.number === seleccionadoNum;
+            const clase = `pm-3d--${b.number}${activo ? ' is-active' : ''}`;
+            const alTocar = { click: () => elegirEdificio(b.number) };
+            return (
+              // La key cambia con `activo` para que Leaflet aplique la clase nueva.
+              <Fragment key={`${b.number}-${activo}`}>
+                {/* Primero TODAS las paredes y luego los techos, para que en
+                    edificios de varias partes ningún muro tape un techo. */}
+                {b.geo.cajas.flatMap((caja) => caja.paredes).map((pared, i) => (
+                  <Polygon
+                    key={`p${i}`}
+                    positions={pared}
+                    pathOptions={{ className: `pm-3d-pared ${clase}`, bubblingMouseEvents: false }}
+                    eventHandlers={alTocar}
+                  />
+                ))}
+                {b.geo.cajas.map((caja, i) => (
+                  <Polygon
+                    key={`t${i}`}
+                    positions={caja.techo}
+                    pathOptions={{ className: `pm-3d-techo ${clase}`, bubblingMouseEvents: false }}
+                    eventHandlers={alTocar}
+                  />
+                ))}
+              </Fragment>
+            );
+          })}
+
+        {/* Un marcador 3D por edificio, parado sobre el techo */}
         {edificios.map((b) => (
           <Marker
             key={b.number}
-            position={b.coords}
+            position={b.geo.cima}
             icon={iconoEdificio(b.number, b.number === seleccionadoNum)}
             zIndexOffset={b.number === seleccionadoNum ? 500 : 0}
             title={b.name || `Edificio ${b.number}`}
@@ -525,6 +688,17 @@ export default function CampusMap({ focusNumber = null, onOpenBuilding, alto = '
           />
         )}
       </MapContainer>
+
+      {/* Fuera del Poli: mapa en rojo + aviso al centro durante 4 s */}
+      {alertaFuera && (
+        <div className="pm-fuera" role="alert">
+          <div className="pm-fuera__tarjeta">
+            <Icon name="wrong_location" size={44} />
+            <strong>No estás en el Poli</strong>
+            <span>Tu ubicación está fuera del campus.</span>
+          </div>
+        </div>
+      )}
 
       {/* Aviso flotante arriba */}
       {aviso && (
@@ -569,7 +743,7 @@ export default function CampusMap({ focusNumber = null, onOpenBuilding, alto = '
               ) : (
                 <div
                   className="pm-hoja__numero"
-                  style={{ background: colors[contenidoHoja.color] ?? colors.blue }}
+                  style={{ background: contenidoHoja.color ?? colors.blue }}
                 >
                   {contenidoHoja.number}
                 </div>
@@ -623,20 +797,90 @@ export default function CampusMap({ focusNumber = null, onOpenBuilding, alto = '
 const ESTILOS = `
 .pm-mapa .leaflet-container { font: inherit; background: color-mix(in srgb, var(--pm-azul) 6%, white); }
 
-/* Marcador de edificio */
+/* Edificios 3D: techo claro, paredes oscuras (color de cada edificio en --c) */
+.pm-3d-techo, .pm-3d-pared { stroke: white; stroke-width: 1; stroke-opacity: .7; fill-opacity: 1; transition: fill .25s ease; }
+.pm-3d-techo { fill: color-mix(in srgb, var(--c, var(--pm-azul)) 80%, white); }
+.pm-3d-pared { fill: color-mix(in srgb, var(--c, var(--pm-azul)) 65%, var(--pm-sombra)); }
+.pm-3d-techo.is-active { fill: color-mix(in srgb, var(--pm-oro) 75%, white); stroke: var(--pm-oro); stroke-width: 2; stroke-opacity: 1; }
+.pm-3d-pared.is-active { fill: color-mix(in srgb, var(--pm-oro) 70%, var(--pm-sombra)); }
+
+/* Marcador 3D de edificio */
 .pm-pin-wrap { background: none; border: 0; }
-.pm-pin {
-  position: relative; width: var(--pm-pin); height: var(--pm-pin); border-radius: 50%;
-  display: grid; place-items: center;
-  background: var(--pm-azul); color: white; font-weight: 700; font-size: calc(var(--pm-pin) * .45);
-  border: 2px solid white; box-shadow: 0 2px 5px rgb(0 0 0 / .35);
-  transform-origin: 50% calc(var(--pm-pin) + 6px); transition: transform .2s ease, background .2s ease;
+.pm-pin { position: relative; width: var(--pm-pin); height: calc(var(--pm-pin) + 10px); }
+.pm-pin__cuerpo {
+  position: absolute; left: 0; top: 0; width: var(--pm-pin); height: var(--pm-pin); border-radius: 50%;
+  display: grid; place-items: center; color: white; font-weight: 800; font-size: calc(var(--pm-pin) * .45);
+  text-shadow: 0 1px 1px rgb(0 0 0 / .35);
+  /* Relieve: luz arriba a la izquierda y sombra abajo a la derecha */
+  background: radial-gradient(circle at 32% 28%,
+    color-mix(in srgb, var(--pm-azul) 45%, white) 0%,
+    var(--pm-azul) 55%,
+    color-mix(in srgb, var(--pm-azul) 60%, var(--pm-sombra)) 100%);
+  border: 2px solid white;
+  box-shadow: inset 0 -3px 4px rgb(0 0 0 / .3), 0 3px 6px rgb(0 0 0 / .35);
+  transform-origin: 50% calc(var(--pm-pin) + 6px);
+  transition: transform .2s ease;
 }
-.pm-pin::after {
+.pm-pin__cuerpo::after {
   content: ""; position: absolute; left: 50%; bottom: -10px; transform: translateX(-50%);
   border: 5px solid transparent; border-top: 7px solid white;
 }
-.pm-pin.is-active { background: var(--pm-carmesi); transform: scale(1.2); }
+/* Sombra ovalada en el "piso" (debajo de la punta) */
+.pm-pin__sombra {
+  position: absolute; left: 50%; top: calc(var(--pm-pin) + 3px); width: calc(var(--pm-pin) * .6); height: 6px;
+  transform: translateX(-50%); border-radius: 50%; background: rgb(0 0 0 / .35); filter: blur(1.5px);
+}
+/* Onda expansiva dorada (solo se ve cuando el pin está activo) */
+.pm-pin__onda {
+  position: absolute; left: 50%; top: calc(var(--pm-pin) + 6px); width: 18px; height: 18px;
+  margin: -9px 0 0 -9px; border-radius: 50%; border: 3px solid var(--pm-oro); opacity: 0; pointer-events: none;
+}
+
+/* Activo: carmesí, brinca y sale la onda */
+.pm-pin.is-active .pm-pin__cuerpo {
+  background: radial-gradient(circle at 32% 28%,
+    color-mix(in srgb, var(--pm-carmesi) 45%, white) 0%,
+    var(--pm-carmesi) 55%,
+    color-mix(in srgb, var(--pm-carmesi) 60%, var(--pm-sombra)) 100%);
+  animation: pm-brinco .7s cubic-bezier(.3,.7,.4,1) both;
+}
+.pm-pin.is-active .pm-pin__sombra { animation: pm-sombra-brinco .7s cubic-bezier(.3,.7,.4,1) both; }
+.pm-pin.is-active .pm-pin__onda { animation: pm-onda 1s ease-out .15s 2; }
+@keyframes pm-brinco {
+  0%   { transform: translateY(0) scale(1); }
+  30%  { transform: translateY(-18px) scale(1.25, 1.1); }
+  55%  { transform: translateY(0) scale(1.35, .9); }
+  75%  { transform: translateY(-5px) scale(1.2); }
+  100% { transform: translateY(0) scale(1.25); }
+}
+@keyframes pm-sombra-brinco {
+  0%, 100% { transform: translateX(-50%) scale(1); }
+  30%      { transform: translateX(-50%) scale(.5); opacity: .5; }
+}
+@keyframes pm-onda {
+  from { transform: scale(.5); opacity: .9; }
+  to   { transform: scale(4.5); opacity: 0; }
+}
+
+/* Fuera del Poli: capa roja sobre el mapa + tarjeta al centro (dura 4 s) */
+.pm-fuera {
+  position: absolute; inset: 0; z-index: 1200; display: grid; place-items: center; padding: 24px;
+  background: color-mix(in srgb, var(--pm-carmesi) 45%, transparent);
+  animation: pm-fuera-capa 4s ease both; pointer-events: none;
+}
+.pm-fuera__tarjeta {
+  display: flex; flex-direction: column; align-items: center; gap: .35rem; text-align: center;
+  padding: 1.2rem 1.6rem; border-radius: 20px; background: white; color: var(--pm-carmesi);
+  box-shadow: 0 10px 30px rgb(0 0 0 / .3); animation: pm-fuera-tarjeta .5s cubic-bezier(.3,.7,.4,1) both;
+}
+.pm-fuera__tarjeta strong { font-size: 1.25rem; font-weight: 800; }
+.pm-fuera__tarjeta span:last-child { font-size: .9rem; color: var(--pm-azul); }
+@keyframes pm-fuera-capa { 0% { opacity: 0; } 8% { opacity: 1; } 88% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes pm-fuera-tarjeta {
+  0% { transform: scale(.6); } 60% { transform: scale(1.08); }
+  70% { transform: translateX(-8px); } 80% { transform: translateX(8px); }
+  90% { transform: translateX(-4px); } 100% { transform: none; }
+}
 
 /* Punto azul del usuario con pulso */
 .pm-user-wrap { background: none; border: 0; }
@@ -699,6 +943,9 @@ const ESTILOS = `
 /* Accesibilidad: sin animaciones si el usuario lo pidió en su sistema */
 @media (prefers-reduced-motion: reduce) {
   .pm-user__pulso { animation: none; }
-  .pm-hoja, .pm-fab, .pm-pin { transition: none; }
+  .pm-hoja, .pm-fab, .pm-pin__cuerpo { transition: none; }
+  .pm-pin.is-active .pm-pin__cuerpo { animation: none; transform: scale(1.25); }
+  .pm-pin.is-active .pm-pin__onda, .pm-pin.is-active .pm-pin__sombra { animation: none; }
+  .pm-fuera__tarjeta { animation: none; }
 }
 `;
