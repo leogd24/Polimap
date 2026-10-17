@@ -229,6 +229,9 @@ function UbicacionUsuario({ posicion }) {
 // Props:
 //   focusNumber    → (opcional) número de edificio a abrir al entrar.
 //                    Sirve para el botón "Ver en el mapa" de Gabo.
+//                    Acepta un número (3) o un objeto { number: 3, vez: 1 }:
+//                    `vez` cambia en cada clic para que el mapa reaccione
+//                    aunque pidan el MISMO edificio dos veces seguidas.
 //   onOpenBuilding → (opcional) función(numero) para abrir la ficha completa.
 //   alto           → alto del mapa. Por defecto toda la pantalla.
 export default function CampusMap({ focusNumber = null, onOpenBuilding, alto = '100dvh' }) {
@@ -288,8 +291,12 @@ export default function CampusMap({ focusNumber = null, onOpenBuilding, alto = '
   }, [mostrarAviso]);
 
   // --- 5.2 Abrir un edificio desde fuera (botón "Ver en el mapa") ---
+  // Si llega un objeto, cada clic es un objeto nuevo, así que este efecto
+  // vuelve a correr aunque el número sea el mismo que la vez anterior.
   useEffect(() => {
-    if (focusNumber != null) setSeleccionadoNum(Number(focusNumber));
+    if (focusNumber == null) return;
+    const numero = typeof focusNumber === 'object' ? focusNumber.number : focusNumber;
+    if (numero != null) setSeleccionadoNum(Number(numero));
   }, [focusNumber]);
 
   const seleccionado = edificios.find((b) => b.number === seleccionadoNum) ?? null;
