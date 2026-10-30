@@ -39,7 +39,7 @@ export default function BuildingCard({ building, onTap }) {
       <div className="flex-1" />
 
       <div
-        className="line-clamp-2 text-[17px] font-black"
+        className="line-clamp-2 text-[1.0625rem] font-black"
         style={{ lineHeight: 1.12 }}
       >
         {building.name}
@@ -56,7 +56,8 @@ export default function BuildingCard({ building, onTap }) {
       </div>
 
       <div className="mt-3 flex w-full items-center">
-        <span className="text-xs font-extrabold" style={{ color: building.color }}>
+        {/* El texto va en "tinta" (siempre legible); el color del edificio queda en la flecha */}
+        <span className="text-xs font-extrabold" style={{ color: colors.ink }}>
           Ver detalles
         </span>
         <div className="flex-1" />

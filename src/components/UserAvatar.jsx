@@ -24,7 +24,7 @@ export default function UserAvatar({ user, size = 36, ring = colors.white }) {
         width: size,
         height: size,
         fontSize: size * 0.38,
-        backgroundColor: colors.cyanDark,
+        backgroundColor: colors.cyanSolid,
         color: colors.white,
         border: `2px solid ${ring}`,
       }}

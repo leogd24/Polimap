@@ -7,9 +7,11 @@ import InfoTile from '../components/InfoTile.jsx';
 import MissingInfo from '../components/MissingInfo.jsx';
 import FilledButton from '../components/FilledButton.jsx';
 import Snackbar from '../components/Snackbar.jsx';
+import EdificioPorDentro from '../components/EdificioPorDentro.jsx';
 
 /// Equivalente de screens/building_detail_screen.dart
-export default function BuildingDetailScreen({ building, onBack }) {
+/// salon (Alexis): id del salón a resaltar en "Por dentro" (ej. 'A05'), opcional.
+export default function BuildingDetailScreen({ building, onBack, salon = null }) {
   const [snackbar, setSnackbar] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -92,6 +94,14 @@ export default function BuildingDetailScreen({ building, onBack }) {
                 {building.description}
               </p>
             )}
+          </div>
+
+          {/* Por dentro: el esquema con tu salón resaltado (Alexis) */}
+          <div className="mt-[22px]">
+            <DetailTitle icon="domain" title="Por dentro" />
+          </div>
+          <div className="mt-[10px]">
+            <EdificioPorDentro number={building.number} salon={salon} />
           </div>
 
           <div className="mt-[22px]">

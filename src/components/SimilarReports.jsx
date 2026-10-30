@@ -71,14 +71,14 @@ export default function SimilarReports({ reports, onSupport, busy }) {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-black">{r.folio}</span>
                     <span
-                      className="px-2 py-[1px] text-[11px] font-bold"
+                      className="px-2 py-[1px] text-[0.6875rem] font-bold"
                       style={{ backgroundColor: estado.bg, color: estado.fg, borderRadius: 6 }}
                     >
                       {estado.label}
                     </span>
                   </div>
                   <p className="m-0 mt-1 line-clamp-2 text-sm" style={{ lineHeight: 1.35 }}>
-                    {r.descripcion}
+                    {r.descripcion ?? <i style={{ color: colors.textMuted }}>Descripción oculta por el filtro de palabras.</i>}
                   </p>
                   <div className="mt-1 text-xs" style={{ color: colors.textMuted }}>
                     {hace(r.createdAt)} · {personas} {personas === 1 ? 'persona lo reportó' : 'personas lo reportaron'}

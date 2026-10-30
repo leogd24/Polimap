@@ -89,7 +89,9 @@ export default function GoogleButton({ clientId, onCredential, hostedDomain, tex
 
   return (
     <div className="w-full">
-      <div ref={boxRef} className="flex min-h-[44px] w-full justify-center" />
+      {/* color-scheme: light → el cuadro de Google queda transparente (sin el
+          recuadro blanco alrededor del botón cuando la app está en modo oscuro). */}
+      <div ref={boxRef} className="flex min-h-[44px] w-full justify-center" style={{ colorScheme: 'light' }} />
       {error && (
         <p className="m-0 mt-2 text-center text-xs" style={{ color: colors.crimsonDark }}>
           {error}

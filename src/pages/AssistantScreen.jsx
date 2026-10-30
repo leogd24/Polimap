@@ -23,7 +23,7 @@ const WELCOME = {
   id: 0,
   from: 'bot',
   text:
-    'Hola, soy el asistente de POLIMAP. Pregúntame por trámites, servicios, edificios o salones del Poli. Solo contesto temas del Poli.',
+    'Hola, soy el asistente de POLIMAP. Pregúntame por trámites, servicios, edificios, salones o dónde está un maestro (ahora o a cierta hora). Solo contesto temas del Poli.',
   building: null,
   tab: null,
   suggestions: STARTER_SUGGESTIONS,
@@ -113,7 +113,7 @@ export default function AssistantScreen({ onBack, onShowOnMap, onNavigate }) {
         </button>
         <div className="ml-2 min-w-0 flex-1">
           <div className="truncate text-xl font-extrabold">Asistente POLIMAP</div>
-          <div className="text-[11px] font-medium" style={{ color: alpha(colors.white, 0.75) }}>
+          <div className="text-[0.6875rem] font-medium" style={{ color: alpha(colors.white, 0.75) }}>
             Solo temas del Poli
           </div>
         </div>
@@ -208,7 +208,7 @@ function UserBubble({ text }) {
   return (
     <div className="mb-3 flex justify-end">
       <div
-        className="max-w-[82%] px-4 py-[10px] text-[15px] font-semibold"
+        className="max-w-[82%] px-4 py-[10px] text-[0.9375rem] font-semibold"
         style={{
           backgroundColor: colors.blue,
           color: colors.white,
@@ -241,13 +241,13 @@ function BotBubble({ message, isLast, onSuggestion, onShowOnMap, onNavigate }) {
         >
           {/* Dónde está (si la respuesta tiene edificio) */}
           {message.building && (
-            <div className="mb-1 flex items-center gap-1 text-[13px] font-extrabold" style={{ color: colors.crimsonDark }}>
+            <div className="mb-1 flex items-center gap-1 text-[0.8125rem] font-extrabold" style={{ color: colors.crimsonDark }}>
               <Icon name="location_on" size={18} color={colors.crimsonDark} />
               <span className="min-w-0">{message.building.name}</span>
             </div>
           )}
 
-          <p className="m-0 text-[15px]" style={{ color: colors.textPrimary, lineHeight: 1.45 }}>
+          <p className="m-0 whitespace-pre-line text-[0.9375rem]" style={{ color: colors.textPrimary, lineHeight: 1.45 }}>
             {message.text}
           </p>
 
@@ -278,11 +278,11 @@ function BotBubble({ message, isLast, onSuggestion, onShowOnMap, onNavigate }) {
                   key={suggestion}
                   type="button"
                   onClick={() => onSuggestion(suggestion)}
-                  className="tappable rounded-full px-3 py-2 text-left text-[13px] font-bold"
+                  className="tappable rounded-full px-3 py-2 text-left text-[0.8125rem] font-bold"
                   style={{
                     backgroundColor: colors.surface,
                     border: `1px solid ${colors.border}`,
-                    color: colors.blue,
+                    color: colors.ink,
                   }}
                 >
                   {suggestion}
@@ -301,10 +301,10 @@ function ActionButton({ icon, label, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className="tappable flex items-center gap-1 rounded-full border-0 px-3 py-2 text-[13px] font-extrabold"
-      style={{ backgroundColor: colors.blueTint, color: colors.blue }}
+      className="tappable flex items-center gap-1 rounded-full border-0 px-3 py-2 text-[0.8125rem] font-extrabold"
+      style={{ backgroundColor: colors.blueTint, color: colors.ink }}
     >
-      <Icon name={icon} size={18} color={colors.blue} />
+      <Icon name={icon} size={18} color={colors.ink} />
       {label}
     </button>
   );

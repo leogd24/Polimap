@@ -15,7 +15,7 @@ export default function FilledButton({
     <button
       type="button"
       onClick={onClick}
-      className={`tappable flex items-center justify-center gap-2 px-5 py-[14px] text-[15px] font-extrabold ${className}`}
+      className={`tappable flex items-center justify-center gap-2 px-5 py-[14px] text-[0.9375rem] font-extrabold ${className}`}
       style={{
         backgroundColor: background,
         color: foreground,

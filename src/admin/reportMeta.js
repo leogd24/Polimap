@@ -3,6 +3,7 @@
 // Las claves (banos, revision...) son las mismas de la base de datos y de
 // docs/contrato-datos.md. Los colores salen SOLO de theme.js.
 import { colors } from '../styles/theme.js';
+import { textoEspacio } from '../data/buildingLayouts.js';
 
 /** Categorías: clave de la BD → nombre, ícono Material y colores (Paleta Oficial del Poli). */
 export const CATEGORIES = {
@@ -32,7 +33,7 @@ export function stateInfo(key) {
 }
 
 export function categoryInfo(key) {
-  return CATEGORIES[key] ?? { label: key, icon: 'report', bg: colors.blueTint, fg: colors.blue };
+  return CATEGORIES[key] ?? { label: key, icon: 'report', bg: colors.blueTint, fg: colors.ink };
 }
 
 /** "2026-10-03T23:06:33" → "3 oct 2026, 23:06" */
@@ -51,6 +52,12 @@ export function locationText(report, buildingNames) {
     return name && name !== base ? `${base} · ${name}` : base;
   }
   return report.zona || 'Sin ubicación';
+}
+
+/** Igual que locationText, más el salón si el alumno lo eligió: "… · Aula A05 (3er piso)". */
+export function locationWithRoom(report, buildingNames) {
+  const base = locationText(report, buildingNames);
+  return report.aula && report.edificioNumber ? `${base} · ${textoEspacio(report.edificioNumber, report.aula)}` : base;
 }
 
 // ---------------------------------------------------------------------------
@@ -147,4 +154,21 @@ export function historyInfo(h) {
     default:
       return { icon: 'history', text: h.accion };
   }
+}
+
+/** Texto de los filtros activos para el encabezado del Excel: "Edificio 3 · Urgente". */
+export function describeFilters(f, buildingNames) {
+  const partes = [];
+  if (f.search?.trim()) partes.push(`búsqueda "${f.search.trim()}"`);
+  if (f.categoria) partes.push(CATEGORIES[f.categoria]?.label ?? f.categoria);
+  if (f.edificio)
+    partes.push(
+      f.edificio === 'zona'
+        ? 'zonas abiertas'
+        : `Edificio ${f.edificio}${buildingNames[f.edificio] && buildingNames[f.edificio] !== `Edificio ${f.edificio}` ? ` (${buildingNames[f.edificio]})` : ''}`,
+    );
+  if (f.prioridad) partes.push(`prioridad ${f.prioridad === 'alta' ? 'urgente' : f.prioridad}`);
+  if (f.desde) partes.push(`desde ${f.desde}`);
+  if (f.hasta) partes.push(`hasta ${f.hasta}`);
+  return partes.join(' · ');
 }

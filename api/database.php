@@ -107,6 +107,13 @@ function iso($fecha): ?string { return $fecha === null ? null : str_replace(' ',
 /** Fecha y hora actual de Guadalajara, lista para MySQL ("2026-10-07 13:05:00"). */
 function ahora(int $sumarSegundos = 0): string { return date('Y-m-d H:i:s', time() + $sumarSegundos); }
 
+/** Grupo como viene en los horarios ('1AM TIN', '5BM BTAD') o null si no se parece. */
+function grupo_o_null($v): ?string
+{
+    $g = strtoupper(trim(preg_replace('/\s+/', ' ', (string) ($v ?? ''))));
+    return preg_match('/^[1-9][A-Z]{1,3} [A-Z]{2,6}$/', $g) ? $g : null;
+}
+
 // 6) Método HTTP ----------------------------------------------------------
 // Algunos hostings gratuitos bloquean PATCH y DELETE. Por eso el frontend
 // manda POST ?_method=PATCH (o DELETE) y aquí lo tratamos como el real.

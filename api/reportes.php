@@ -26,6 +26,7 @@
 require __DIR__ . '/database.php';
 require __DIR__ . '/sesion.php';      // quién está usando la API
 require __DIR__ . '/notificar.php';   // aviso por correo de reportes nuevos
+require __DIR__ . '/moderacion.php';  // filtro: la descripción de "similares" la ven otros alumnos
 
 const CATEGORIAS = ['basura', 'mobiliario', 'banos', 'fuga', 'iluminacion', 'riesgo', 'otro'];
 const ESTADOS    = ['recibido', 'revision', 'proceso', 'resuelto'];
@@ -63,6 +64,9 @@ function crear_reporte(): void
     $descripcion = trim($_POST['descripcion'] ?? '');
     $edificio    = ($_POST['edificio_number'] ?? '') === '' ? null : filter_var($_POST['edificio_number'], FILTER_VALIDATE_INT);
     $zona        = trim($_POST['zona'] ?? '') ?: null;
+    // Salón dentro del edificio (opcional): 'A05', 'L07', 'T01', 'BAN', 'S02'…
+    // (los ids salen de src/data/buildingLayouts.js). Solo letras y números.
+    $aula        = strtoupper(trim($_POST['aula'] ?? '')) ?: null;
     $anonimo     = ($_POST['anonimo'] ?? '1') === '0' ? 0 : 1;
     $lat         = coordenada($_POST['lat'] ?? '', 90);
     $lng         = coordenada($_POST['lng'] ?? '', 180);
@@ -87,6 +91,9 @@ function crear_reporte(): void
     if ($zona !== null && mb_strlen($zona) > 100) {
         error_json('La zona es demasiado larga');
     }
+    if ($aula !== null && ($edificio === null || !preg_match('/^[A-Z]{1,4}\d{0,2}$/', $aula))) {
+        error_json('El salón no es válido');
+    }
     if (($lat === null) !== ($lng === null)) {
         error_json('Faltan coordenadas: se necesitan lat y lng juntas');
     }
@@ -102,11 +109,11 @@ function crear_reporte(): void
         $creado    = ahora();
         $stmt = $pdo->prepare(
             'INSERT INTO reportes
-               (categoria, edificio_number, zona, descripcion, foto, lat, lng, precision_m, anonimo,
+               (categoria, edificio_number, zona, aula, descripcion, foto, lat, lng, precision_m, anonimo,
                 prioridad, usuario_id, creado_en)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
-        $stmt->execute([$categoria, $edificio, $zona, $descripcion, $foto, $lat, $lng, $precision, $anonimo,
+        $stmt->execute([$categoria, $edificio, $zona, $aula, $descripcion, $foto, $lat, $lng, $precision, $anonimo,
                         $prioridad, $usuario['id'], $creado]);
 
         $id    = (int) $pdo->lastInsertId();
@@ -128,7 +135,7 @@ function crear_reporte(): void
     if ($edificio !== null) {
         $nombre = $pdo->prepare('SELECT name FROM edificios WHERE number = ?');
         $nombre->execute([$edificio]);
-        $ubicacion = "Edificio $edificio · " . ($nombre->fetchColumn() ?: '');
+        $ubicacion = "Edificio $edificio · " . ($nombre->fetchColumn() ?: '') . ($aula ? " · Salón $aula" : '');
     }
     $avisoEnviado = notificar_reporte([
         'folio'       => $folio,
@@ -205,7 +212,7 @@ function guardar_foto(array $CONFIG): ?string
 function listar_reportes(): void
 {
     $pdo = db();
-    $sql = 'SELECT r.id, r.folio, r.categoria, r.edificio_number, r.zona, r.descripcion, r.foto,
+    $sql = 'SELECT r.id, r.folio, r.categoria, r.edificio_number, r.zona, r.aula, r.descripcion, r.foto,
                    r.lat, r.lng, r.anonimo, r.estado, r.prioridad, r.comentario_admin,
                    r.creado_en, r.actualizado_en, r.resuelto_en, r.usuario_id,
                    u.nombre AS autor_nombre, u.correo AS autor_correo,
@@ -240,6 +247,7 @@ function reporte_json(array $r, bool $paraAdmin): array
         'categoria'       => $r['categoria'],
         'edificioNumber'  => int_o_null($r['edificio_number']),
         'zona'            => $r['zona'],
+        'aula'            => $r['aula'] ?? null,   // salón del esquema ('A05'), o null
         'descripcion'     => $r['descripcion'],
         'foto'            => $r['foto'] ? $CONFIG['upload_url'] . '/' . $r['foto'] : null,
         'lat'             => num_o_null($r['lat']),
@@ -300,7 +308,9 @@ function listar_similares(): void
         'categoria'      => $r['categoria'],
         'edificioNumber' => int_o_null($r['edificio_number']),
         'zona'           => $r['zona'],
-        'descripcion'    => $r['descripcion'],
+        // Otros alumnos ven esta descripción: si no pasa el filtro, no se muestra
+        // (el reporte sí llega completo al equipo que lo atiende).
+        'descripcion'    => moderar_texto((string) $r['descripcion'])['ok'] ? $r['descripcion'] : null,
         'foto'           => $r['foto'] ? $CONFIG['upload_url'] . '/' . $r['foto'] : null,
         'estado'         => $r['estado'],
         'prioridad'      => $r['prioridad'],

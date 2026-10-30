@@ -79,6 +79,7 @@ Igual que `espacios` (id, edificio_number FK, nombre, orden).
 | categoria | ENUM('basura','mobiliario','banos','fuga','iluminacion','riesgo','otro') | |
 | edificio_number | TINYINT UNSIGNED NULL **FK → edificios** ON DELETE SET NULL | si eligió un edificio |
 | zona | VARCHAR(100) NULL | si eligió "Explanada" u "Otra zona" |
+| aula | VARCHAR(20) NULL | salón dentro del edificio: `A05`, `L07`, `T01`, `BAN`, `S01`… (ids de `src/data/buildingLayouts.js`) |
 | descripcion | VARCHAR(500) NOT NULL | mínimo 10 caracteres (igual que el formulario) |
 | foto | VARCHAR(255) NULL | nombre aleatorio en `api/uploads/` |
 | lat, lng | DECIMAL(9,6) NULL | GPS del navegador |
@@ -99,6 +100,15 @@ Regla: el reporte necesita **`edificio_number` o `zona`** (lo que hoy es el camp
 | contenido | TEXT |
 | tipo | ENUM('general','urgente','evento') DEFAULT 'general' |
 | fecha_inicio, fecha_fin | DATE |
+| notificado_en | DATETIME NULL (cuándo se mandó como notificación push) |
+
+### Avisos como posts (ver `docs/avisos-comentarios.md`)
+`avisos` + `fijado`, `comentarios_abiertos`, `autor_id`, `creado_en`; tablas `avisos_fotos`, `avisos_likes`,
+`avisos_comentarios` (padre_id = respuesta, estado visible|oculto|borrado), `comentarios_reportes`,
+`moderacion_log` y `comentarios_silenciados`.
+
+### `push_suscripciones`
+Un renglón por celular que activó las notificaciones (endpoint, p256dh, auth, usuario_id NULL, fallos). Ver `docs/notificaciones-push.md`.
 
 ### `usuarios_admin`
 | Columna | Tipo |
@@ -167,6 +177,7 @@ Se envía como **`FormData`** (por la foto):
 | descripcion | sí (≥10 caracteres) | `El lavabo del baño de hombres gotea` |
 | edificio_number | uno de los dos | `3` |
 | zona | uno de los dos | `Explanada` |
+| aula | no (solo con edificio) | `A05` |
 | anonimo | no (default 1) | `1` |
 | foto | no | archivo jpg/png/webp, máx 2 MB (comprimir antes) |
 | lat, lng, precision_m | no | `20.7466`, `-103.3797`, `15` |
@@ -199,6 +210,7 @@ Además trae `anonimo`, `prioridad` (`baja|media|alta`) y `resolvedAt`; para el 
     "categoria": "banos",
     "edificioNumber": 3,
     "zona": null,
+    "aula": "BAN",
     "descripcion": "El lavabo del baño de hombres gotea",
     "foto": "/api/uploads/a8f3c2e1.jpg",
     "lat": 20.7466, "lng": -103.3797,
@@ -223,6 +235,18 @@ Ver `docs/login.md`: Google, código de 6 dígitos por correo, contraseña del p
 ]
 ```
 Solo regresa avisos vigentes (hoy entre `fecha_inicio` y `fecha_fin`), urgentes primero.
+Al crear o editar (panel) se puede mandar `"notify": true` para enviarlo como notificación push.
+Cada aviso trae además: `photos[]`, `pinned`, `allowComments`, `likes`, `liked`, `comments`, `createdAt`.
+
+`files[]` (adjuntos, `sql/migracion-avisos-archivos.sql`): cada uno es
+`{ name, ext, size, url, download, archivo }`. `url` es el archivo tal cual (la
+vista previa del PDF la usa); `download` es `/api/avisos.php?descargar=…`, que lo
+manda con su nombre original para guardarlo. Las fotos se descargan igual:
+`/api/avisos.php?descargar=<nombre de la foto>`.
+`POST {accion:'like', id}` da o quita me gusta. Comentarios: `/api/comentarios.php` (ver `docs/avisos-comentarios.md`).
+
+### `/api/push.php` → notificaciones (Alexis)
+`GET ?clave=1` (llave pública), `POST {accion:'suscribir'|'cancelar'|'probar'}`, `GET ?estado=1` (panel). Ver `docs/notificaciones-push.md`.
 
 ---
 

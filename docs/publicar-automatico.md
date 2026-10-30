@@ -10,7 +10,7 @@ Cada vez que se hace **Merge** de un Pull Request a `main`, GitHub:
 
 Se acabó subir archivos a mano en el File Manager.
 
-**Nunca sube ni borra:** `api/config.php` (contraseñas), `api/uploads/` (fotos de reportes) ni los certificados de Google en `api/cache/`.
+**Nunca sube ni borra:** `api/config.php` (contraseñas), `api/uploads/` (fotos de reportes), los certificados de Google ni las llaves de notificaciones (`api/cache/vapid-keys.php`).
 
 **Lo que sigue siendo a mano:** los cambios de base de datos (`sql/migracion-*.sql`) se importan en phpMyAdmin, y `config.php` del servidor se edita en el File Manager.
 

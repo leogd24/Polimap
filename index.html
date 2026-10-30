@@ -23,6 +23,16 @@
       href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,0&display=block"
       rel="stylesheet"
     />
+    <!-- Tema oscuro / letra grande ANTES de pintar (sin parpadeo). Ver src/lib/tema.js -->
+    <script>
+      try {
+        var p = JSON.parse(localStorage.getItem('polimap.apariencia') || '{}');
+        var oscuro = p.tema === 'oscuro' || ((!p.tema || p.tema === 'auto') && matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.tema = oscuro ? 'oscuro' : 'claro';
+        if (p.letra) document.documentElement.dataset.letra = p.letra;
+        if (p.contraste) document.documentElement.dataset.contraste = p.contraste;
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -27,12 +27,33 @@ export const colors = {
   magentaDark: 'var(--color-magenta-dark)',
   magentaLight: 'var(--color-magenta-light)',
   magentaTint: 'var(--color-magenta-tint)',
+  // Noche como texto/ícono/borde sobre tarjetas (en oscuro se aclara).
+  ink: 'var(--color-ink)',
+  // Fondos sólidos con texto blanco (iguales en claro y oscuro).
+  cyanSolid: 'var(--color-cyan-solid)',
+  crimsonSolid: 'var(--color-crimson-solid)',
+  goldSolid: 'var(--color-gold-solid)',
+  greenSolid: 'var(--color-green-solid)',
+  magentaSolid: 'var(--color-magenta-solid)',
   background: 'var(--color-background)',
   surface: 'var(--color-surface)',
   border: 'var(--color-border)',
   textPrimary: 'var(--color-text-primary)',
   textSecondary: 'var(--color-text-secondary)',
   textMuted: 'var(--color-text-muted)',
+  // Esquema de edificios (panel)
+  concrete: 'var(--color-concrete)',
+  concreteLight: 'var(--color-concrete-light)',
+  concreteDark: 'var(--color-concrete-dark)',
+  concreteShadow: 'var(--color-concrete-shadow)',
+  door: 'var(--color-door)',
+  window: 'var(--color-window)',
+  windowLit: 'var(--color-window-lit)',
+  skyDay: 'var(--color-sky-day)',
+  skyDayLow: 'var(--color-sky-day-low)',
+  skyDusk: 'var(--color-sky-dusk)',
+  grass: 'var(--color-grass)',
+  grassDark: 'var(--color-grass-dark)',
   white: '#ffffff',
 };
 

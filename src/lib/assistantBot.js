@@ -17,10 +17,11 @@
 //     building:    { number, name } | null   → muestra "Ver en el mapa"
 //     tab:         'horario' | 'reportar' | null → botón para ir a esa pestaña
 //     suggestions: ['¿Dónde está Psicología?', ...] → botones de preguntas
-//     kind:        'faq' | 'building' | 'room' | 'smalltalk' | 'offtopic'
+//     kind:        'faq' | 'building' | 'room' | 'maestro' | 'libres' | 'smalltalk' | 'offtopic'
 //   }
 
 import { allSchedules } from '../data/schedules.js';
+import { respuestaHorario } from './asistenteHorario.js';
 
 // ---------------------------------------------------------------------
 // PASO 1. Ajustes (aquí se calibra qué tan "estricto" es el bot)
@@ -40,6 +41,8 @@ export const STARTER_SUGGESTIONS = [
   '¿Dónde está Psicología?',
   '¿Dónde pido prestado un cable HDMI?',
   '¿Cómo encuentro mi salón?',
+  '¿Dónde está el profe Cisneros ahora?',
+  '¿Qué salones están libres?',
 ];
 
 // Palabras que no aportan significado ("dónde", "el", "mi"...).
@@ -341,6 +344,11 @@ function answerInner(pregunta, { faq = [], buildings = [] }) {
       kind: 'room',
     });
   }
+
+  // 7.2b ¿Dónde está un maestro? / ¿Qué salones están libres? (horarios oficiales,
+  // src/lib/asistenteHorario.js). null = no era de horarios y se sigue normal.
+  const deHorario = respuestaHorario(pregunta, { buildings });
+  if (deHorario) return conSaludo(deHorario);
 
   // 7.3 Preguntas frecuentes: la que tenga más puntos
   const ranking = faq

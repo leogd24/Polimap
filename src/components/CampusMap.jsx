@@ -628,6 +628,7 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+          crossOrigin // así el service worker puede guardar los cuadritos y verlos sin internet
           maxNativeZoom={19} // OSM llega a 19; en 20 se amplía la imagen de 19
           maxZoom={CAMPUS.zoomMax}
         />
@@ -953,3 +954,7 @@ const ESTILOS = `
   .pm-fuera__tarjeta { animation: none; }
 }
 `;
+
+// Para el panel de administración (src/admin/MapSection.jsx): el mismo
+// mapa 3D de Marcos, con los mismos edificios y estilos.
+export { geometria3D, ESTILOS as ESTILOS_MAPA };

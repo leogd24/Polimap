@@ -25,7 +25,7 @@ export default function HistoryList({ items, showFolio = false, onOpenFolio }) {
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
                 style={{ backgroundColor: colors.blueTint }}
               >
-                <Icon name={info.icon} size={16} color={colors.blue} />
+                <Icon name={info.icon} size={16} color={colors.ink} />
               </span>
               {index < items.length - 1 && <span className="w-[2px] flex-1" style={{ backgroundColor: colors.border }} />}
             </div>
@@ -36,7 +36,7 @@ export default function HistoryList({ items, showFolio = false, onOpenFolio }) {
                     type="button"
                     onClick={() => onOpenFolio?.(h.folio)}
                     className="mr-1 border-0 bg-transparent p-0 font-black underline"
-                    style={{ color: colors.blue, cursor: 'pointer' }}
+                    style={{ color: colors.ink, cursor: 'pointer' }}
                   >
                     {h.folio}
                   </button>

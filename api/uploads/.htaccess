@@ -1,6 +1,12 @@
-# Seguridad: en esta carpeta solo hay fotos. Apache nunca sirve ni ejecuta
-# archivos PHP de aquí, aunque alguien lograra subir uno.
+# Seguridad: en esta carpeta solo hay fotos y archivos adjuntos de avisos
+# (PDF, Word, Excel, PowerPoint). Apache nunca sirve ni ejecuta archivos PHP
+# de aquí, aunque alguien lograra subir uno.
 <FilesMatch "\.(php|phtml|phar|php\d)$">
     Require all denied
 </FilesMatch>
 Options -Indexes
+# El navegador no debe "adivinar" el tipo de archivo (evita que un archivo
+# disfrazado se abra como página web).
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+</IfModule>

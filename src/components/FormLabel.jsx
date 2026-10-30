@@ -10,7 +10,7 @@ export default function FormLabel({ number, label }) {
       >
         {number}
       </div>
-      <span className="ml-[9px] text-[17px] font-black">{label}</span>
+      <span className="ml-[9px] text-[1.0625rem] font-black">{label}</span>
     </div>
   );
 }

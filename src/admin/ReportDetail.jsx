@@ -74,6 +74,7 @@ export default function ReportDetail({ report, location, onClose, onSaved, onErr
       className="fixed inset-0 z-40 flex items-end justify-center sm:items-center sm:p-6"
       style={{ backgroundColor: alpha('#000000', 0.45) }}
       onClick={onClose}
+      data-report-detail // el esquema del edificio no se cierra con Esc mientras esto está abierto
     >
       <div
         className="app-scroll max-h-[92vh] w-full max-w-[560px]"
@@ -86,7 +87,7 @@ export default function ReportDetail({ report, location, onClose, onSaved, onErr
           {/* Encabezado */}
           <div className="flex items-center gap-3 p-5 pb-3">
             <div className="min-w-0 flex-1">
-              <div className="text-xl font-black" style={{ color: colors.blue }}>
+              <div className="text-xl font-black" style={{ color: colors.ink }}>
                 {report.folio}
               </div>
               <div className="mt-1 flex items-center gap-1 text-sm font-bold">

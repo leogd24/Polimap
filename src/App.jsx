@@ -110,7 +110,7 @@ export default function App() {
             session={session ?? { offline: true }}
             onLoggedIn={handleLoggedIn}
             onCancel={() => setLoginOpen(false)}
-            reason="Para reportar entra con tu correo @alumnos.udg.mx"
+            reason="Para reportar, comentar o dar me gusta, entra con tu correo @alumnos.udg.mx"
           />
         </div>
       )}
