@@ -6,6 +6,7 @@
 import { colors, alpha } from '../styles/theme.js';
 import Card from './Card.jsx';
 import Icon from './Icon.jsx';
+import { EnlacePrivacidad } from './AparienciaSheet.jsx';
 import UserAvatar from './UserAvatar.jsx';
 import FilledButton from './FilledButton.jsx';
 
@@ -55,10 +56,11 @@ export default function AccountSheet({ user, onClose, onLogout }) {
                 className="tappable flex min-h-[52px] items-center gap-3 px-4 font-bold no-underline"
                 style={{ backgroundColor: colors.background, color: colors.textPrimary, borderRadius: 16 }}
               >
-                <Icon name="admin_panel_settings" color={colors.blue} />
+                <Icon name="admin_panel_settings" color={colors.ink} />
                 Abrir panel de administración
               </a>
             )}
+            <EnlacePrivacidad />
             <FilledButton icon="logout" onClick={onLogout} className="w-full">
               Cerrar sesión
             </FilledButton>

@@ -3,7 +3,10 @@
   public/privacidad.html — Responsable: Alexis
   Aviso de privacidad de POLIMAP. Es una página fija (no usa React):
   Vite la copia tal cual a dist/ y queda en https://polimap.ct.ws/privacidad.html
-  Google la pide para publicar el inicio de sesión con Google.
+  Se abre desde: inicio de sesión, tu cuenta (foto de perfil) y "Apariencia y
+  accesibilidad" (app y panel). Google la pide para el inicio de sesión con Google.
+  Funciona sin internet (el service worker la guarda) y respeta el modo oscuro
+  que elegiste en la app.
   Colores: los de la Paleta Oficial del Politécnico (src/styles/theme.css).
 -->
 <html lang="es">
@@ -11,16 +14,38 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Aviso de privacidad · POLIMAP</title>
+    <meta name="description" content="Qué datos usa POLIMAP, para qué y cómo pedir que se corrijan o borren." />
     <meta name="theme-color" content="#14203A" />
     <link rel="icon" type="image/png" href="/favicon.png" />
+    <script>
+      // Mismo tema que elegiste en la app (Apariencia y accesibilidad).
+      try {
+        var p = JSON.parse(localStorage.getItem('polimap.apariencia') || '{}');
+        var oscuro = p.tema === 'oscuro' || ((!p.tema || p.tema === 'auto') && matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.tema = oscuro ? 'oscuro' : 'claro';
+      } catch (e) {}
+    </script>
     <style>
       :root {
         --noche: #14203a;
         --fondo: #f3f5f9;
+        --tarjeta: #ffffff;
         --texto: #14203a;
         --gris: #5d6980;
         --borde: #dce3ed;
-        --ciano: #006a96;
+        --enlace: #006a96;
+        --suave: #eaf1f8;
+        color-scheme: light;
+      }
+      :root[data-tema='oscuro'] {
+        --fondo: #0b1424;
+        --tarjeta: #14203a;
+        --texto: #eef2f8;
+        --gris: #b4bfd1;
+        --borde: #2a3a58;
+        --enlace: #5cc8f2;
+        --suave: #1b2a47;
+        color-scheme: dark;
       }
       * { box-sizing: border-box; }
       body {
@@ -30,28 +55,48 @@
         font: 16px/1.6 Roboto, system-ui, -apple-system, 'Segoe UI', sans-serif;
       }
       header { background: var(--noche); color: #fff; padding: 20px 16px; }
-      header .caja { max-width: 760px; margin: 0 auto; display: flex; align-items: center; gap: 14px; }
-      header img { width: 48px; height: 48px; border-radius: 14px; }
-      header h1 { margin: 0; font-size: 20px; }
-      header p { margin: 0; font-size: 13px; opacity: 0.8; }
+      header .caja { max-width: 780px; margin: 0 auto; display: flex; align-items: center; gap: 14px; }
+      header img { width: 52px; height: 52px; border-radius: 15px; }
+      header h1 { margin: 0; font-size: 21px; line-height: 1.2; }
+      header p { margin: 2px 0 0; font-size: 13px; opacity: 0.82; }
+      .volver { color: #fff; text-decoration: none; font-weight: 700; font-size: 14px; display: inline-flex; gap: 6px; align-items: center; margin-bottom: 10px; opacity: 0.9; }
       .franja { display: flex; height: 5px; }
       .franja i { flex: 1; }
-      main { max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; }
-      section { background: #fff; border: 1px solid var(--borde); border-radius: 18px; padding: 20px; margin-bottom: 16px; }
+      main { max-width: 780px; margin: 0 auto; padding: 22px 16px 56px; }
+      section { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 20px; padding: 20px; margin-bottom: 14px; }
       h2 { margin: 0 0 8px; font-size: 18px; }
+      h3 { margin: 14px 0 4px; font-size: 15px; }
+      p { margin: 8px 0 0; }
       ul { margin: 8px 0 0; padding-left: 20px; }
-      li { margin-bottom: 4px; }
+      li { margin-bottom: 6px; }
       .gris { color: var(--gris); font-size: 14px; }
-      a { color: var(--ciano); font-weight: 700; }
+      .resumen { background: var(--suave); border-color: transparent; }
+      .resumen ul { list-style: none; padding: 0; }
+      .resumen li { display: flex; gap: 10px; }
+      .resumen li b { flex-shrink: 0; }
+      table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+      th, td { text-align: left; vertical-align: top; padding: 9px 8px; border-top: 1px solid var(--borde); }
+      th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gris); border-top: 0; }
+      td:first-child { font-weight: 700; width: 34%; }
+      a { color: var(--enlace); font-weight: 700; }
+      nav.indice { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+      nav.indice a { font-size: 13px; text-decoration: none; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--borde); background: var(--tarjeta); }
+      @media (max-width: 560px) {
+        table, thead, tbody, tr, th, td { display: block; }
+        thead { display: none; }
+        tr { border-top: 1px solid var(--borde); padding: 8px 0; }
+        td { border: 0; padding: 2px 0; width: auto !important; }
+      }
     </style>
   </head>
   <body>
     <header>
       <div class="caja">
-        <img src="/img/logo-polimap.png" alt="POLIMAP" />
+        <img src="/img/logo-polimap.png" alt="" />
         <div>
-          <h1>Aviso de privacidad de POLIMAP</h1>
-          <p>Escuela Politécnica "Ing. Jorge Matute Remus" · Universidad de Guadalajara</p>
+          <a class="volver" href="/">← Volver a POLIMAP</a>
+          <h1>Aviso de privacidad</h1>
+          <p>POLIMAP · Escuela Politécnica "Ing. Jorge Matute Remus" · Universidad de Guadalajara</p>
         </div>
       </div>
     </header>
@@ -61,73 +106,169 @@
     </div>
 
     <main>
-      <p class="gris">Última actualización: 8 de octubre de 2026</p>
+      <p class="gris">Última actualización: 30 de octubre de 2026</p>
 
-      <section>
-        <h2>¿Qué es POLIMAP?</h2>
-        <p>
-          POLIMAP es una aplicación web hecha por estudiantes como proyecto escolar para orientarse dentro de la
-          Escuela Politécnica: mapa del campus, edificios, horarios, asistente de preguntas frecuentes y reportes de
-          incidencias (basura, baños, iluminación, etc.).
-        </p>
-      </section>
-
-      <section>
-        <h2>Qué datos usamos</h2>
+      <section class="resumen" aria-label="Resumen">
+        <h2>En pocas palabras</h2>
         <ul>
-          <li><b>Sin iniciar sesión (invitado):</b> no pedimos ningún dato personal.</li>
-          <li>
-            <b>Al iniciar sesión</b> (con Google o con un código enviado a tu correo): tu <b>nombre</b>, tu
-            <b>correo institucional</b> y, si entras con Google, tu <b>foto de perfil</b>. No recibimos ni guardamos
-            tu contraseña de Google.
-          </li>
-          <li>
-            <b>Al enviar un reporte:</b> la categoría, la ubicación (edificio o zona), la descripción, la foto si la
-            agregas y, si lo permites, la ubicación GPS del celular.
-          </li>
-          <li>
-            <b>Para mantener tu sesión</b> usamos una cookie técnica. No usamos cookies de publicidad ni de
-            seguimiento.
-          </li>
+          <li><b aria-hidden="true">👤</b><span>Sin iniciar sesión no pedimos ningún dato personal.</span></li>
+          <li><b aria-hidden="true">✉️</b><span>Con tu cuenta usamos solo tu nombre, tu correo institucional y tu foto de Google.</span></li>
+          <li><b aria-hidden="true">📱</b><span>Tu horario, tus calificaciones y tus faltas se guardan solo en tu celular.</span></li>
+          <li><b aria-hidden="true">🚫</b><span>No vendemos ni compartimos tus datos, y no hay publicidad.</span></li>
+          <li><b aria-hidden="true">🗑️</b><span>Puedes pedir ver, corregir o borrar tus datos en <a href="mailto:polimap505@gmail.com">polimap505@gmail.com</a>.</span></li>
         </ul>
       </section>
 
-      <section>
-        <h2>Para qué los usamos</h2>
+      <nav class="indice" aria-label="Contenido">
+        <a href="#que-es">Qué es</a><a href="#datos">Qué datos</a><a href="#celular">En tu celular</a><a href="#quien">Quién los ve</a
+        ><a href="#terceros">Otros servicios</a><a href="#tiempo">Cuánto tiempo</a><a href="#derechos">Tus derechos</a>
+      </nav>
+
+      <section id="que-es">
+        <h2>¿Qué es POLIMAP y quién es responsable?</h2>
+        <p>
+          POLIMAP es una aplicación web hecha por estudiantes como proyecto escolar para la comunidad de la Escuela Politécnica: mapa del campus,
+          edificios, horarios, asistente de preguntas, avisos, reportes de incidencias, objetos perdidos y el calendario de cada grupo.
+        </p>
+        <p>
+          El responsable de tus datos es el <b>Equipo POLIMAP</b> (contacto: <a href="mailto:polimap505@gmail.com">polimap505@gmail.com</a>). POLIMAP no
+          sustituye los canales oficiales de la escuela ni de la Universidad.
+        </p>
+      </section>
+
+      <section id="datos">
+        <h2>Qué datos usamos y para qué</h2>
+        <table>
+          <thead>
+            <tr><th>Cuándo</th><th>Qué datos y para qué</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Como invitado</td>
+              <td>Ninguno personal. Puedes ver el mapa, los edificios, los horarios, los avisos públicos y el asistente.</td>
+            </tr>
+            <tr>
+              <td>Al iniciar sesión</td>
+              <td>
+                Con Google o con un código enviado a tu correo usamos tu <b>nombre</b>, tu <b>correo institucional</b> (@alumnos.udg.mx o
+                @academicos.udg.mx), tu <b>foto</b> si entras con Google y la fecha de tu último acceso. Sirven para confirmar que eres de la escuela.
+                Nunca recibimos tu contraseña de Google.
+              </td>
+            </tr>
+            <tr>
+              <td>Reportes de incidencias</td>
+              <td>
+                La categoría, el lugar, la descripción, la foto si la agregas y la ubicación GPS si la permites. Sirven para que el equipo que atiende
+                el plantel lo resuelva y para que veas su seguimiento. Si lo mandas <b>como anónimo</b>, ese equipo no ve tu nombre ni tu correo.
+              </td>
+            </tr>
+            <tr>
+              <td>Comentarios, me gusta y encuestas</td>
+              <td>
+                Tus comentarios se publican con tu nombre y tu foto. De las encuestas, en la app y en el panel solo se muestran los totales: nadie ve qué votaste tú.
+              </td>
+            </tr>
+            <tr>
+              <td>Objetos perdidos</td>
+              <td>
+                Lo que publicas: qué es, la descripción, la foto, el lugar y la fecha. Tu correo solo aparece si tú lo permites. Las publicaciones se
+                borran solas 30 días después de vencer.
+              </td>
+            </tr>
+            <tr>
+              <td>Consejales y subconsejales</td>
+              <td>
+                Si la coordinación te designa, tu nombre aparece como consejal de tu grupo. Las fechas, los avisos y los encuadres que publiques
+                llevan tu nombre.
+              </td>
+            </tr>
+            <tr>
+              <td>Notificaciones</td>
+              <td>
+                Si las activas, guardamos una llave técnica de tu navegador para mandarte avisos, y el grupo que elegiste para los avisos de tu
+                grupo. Las puedes apagar cuando quieras.
+              </td>
+            </tr>
+            <tr>
+              <td>Filtro de palabras</td>
+              <td>
+                Para cuidar el ambiente del Poli, lo que escribes en público pasa por un filtro (groserías, amenazas, teléfonos, correos y enlaces de
+                fuera). Lo que se bloquea se guarda para que un administrador lo revise. Si se bloquean varios textos, tu cuenta puede quedar en pausa.
+              </td>
+            </tr>
+            <tr>
+              <td>Sesión</td>
+              <td>Una cookie técnica para que no tengas que entrar cada vez. No usamos cookies de publicidad ni de seguimiento.</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="gris">
+          Algunos alumnos del bachillerato son menores de edad. Por eso no pedimos más datos que el correo institucional, no publicamos teléfonos
+          ni correos y el filtro bloquea datos personales.
+        </p>
+      </section>
+
+      <section id="celular">
+        <h2>Lo que se queda solo en tu celular</h2>
+        <p>Esto no se manda a ningún servidor y se borra si borras los datos del sitio o desinstalas la app:</p>
         <ul>
-          <li>Confirmar que eres alumno del plantel (correo @alumnos.udg.mx) antes de dejarte reportar.</li>
-          <li>Mostrarte el seguimiento de tus reportes ("Mis reportes").</li>
-          <li>Que el equipo que atiende las incidencias del plantel pueda revisarlas y resolverlas.</li>
+          <li>El grupo que elegiste en Horario y tus recordatorios de clase.</li>
+          <li>Tus calificaciones y tus faltas de la calculadora de Notas.</li>
+          <li>La división del grupo y la lista que lleve el consejal.</li>
+          <li>Tus preferencias de apariencia: tema, tamaño de letra y contraste.</li>
+          <li>Una copia de los avisos, los edificios y las preguntas para usar la app sin internet.</li>
+          <li>Los reportes que hiciste sin internet, hasta que se envíen.</li>
         </ul>
-        <p>
-          Si envías un reporte como <b>anónimo</b>, el equipo que lo atiende no ve tu nombre ni tu correo.
-          <b>No vendemos ni compartimos tus datos</b> con terceros ni los usamos para publicidad.
-        </p>
       </section>
 
-      <section>
-        <h2>Dónde se guardan</h2>
-        <p>
-          En la base de datos del proyecto, alojada en el servicio de hospedaje InfinityFree. Solo los
-          administradores designados del plantel pueden ver los reportes, y entran con su propia cuenta.
-        </p>
+      <section id="quien">
+        <h2>Quién ve tus datos</h2>
+        <ul>
+          <li><b>Otros alumnos con sesión:</b> tu nombre y foto en lo que publicas (comentarios, objetos perdidos y, si eres consejal, lo que publicas para tu grupo).</li>
+          <li><b>Administradores designados del plantel:</b> los reportes, lo que bloqueó el filtro y el historial del panel. Entran con su propia cuenta y sus acciones quedan registradas.</li>
+          <li><b>Nadie más:</b> no vendemos ni compartimos tus datos con terceros ni los usamos para publicidad.</li>
+        </ul>
       </section>
 
-      <section>
+      <section id="terceros">
+        <h2>Otros servicios que usa POLIMAP</h2>
+        <ul>
+          <li><b>InfinityFree:</b> hospeda la app y la base de datos.</li>
+          <li><b>Google:</b> el inicio de sesión (solo si lo eliges) y las letras e íconos de la app.</li>
+          <li><b>Gmail:</b> manda los códigos de acceso y avisa al equipo cuando llega un reporte.</li>
+          <li><b>OpenStreetMap:</b> los mapas del campus.</li>
+          <li><b>Open-Meteo:</b> el clima. Solo se le mandan las coordenadas del campus, no las tuyas.</li>
+          <li><b>El servicio de notificaciones de tu navegador</b> (Google, Apple o Mozilla), si activas los avisos.</li>
+        </ul>
+        <p class="gris">Al usar estos servicios, tu navegador se conecta con ellos y pueden ver tu dirección IP, como pasa con cualquier página web.</p>
+      </section>
+
+      <section id="tiempo">
+        <h2>Cuánto tiempo guardamos los datos</h2>
+        <ul>
+          <li><b>Sesión:</b> 30 días, o hasta que cierres sesión.</li>
+          <li><b>Códigos de acceso:</b> unos minutos.</li>
+          <li><b>Objetos perdidos:</b> se borran solos 30 días después de vencer.</li>
+          <li><b>Notificaciones:</b> hasta que las apagues o tu navegador las desactive.</li>
+          <li><b>Lo demás</b> (cuenta, reportes, comentarios, fechas, avisos): mientras dure el proyecto, o hasta que pidas que se borre.</li>
+        </ul>
+      </section>
+
+      <section id="derechos">
         <h2>Tus derechos</h2>
         <p>
-          Puedes pedir ver, corregir o borrar tus datos y tus reportes escribiendo a
-          <a href="mailto:polimap505@gmail.com">polimap505@gmail.com</a>. También puedes cerrar sesión en cualquier
-          momento desde tu foto de perfil en la app.
+          Puedes pedir <b>ver</b>, <b>corregir</b> o <b>borrar</b> tus datos, o que dejemos de usarlos. Escribe a
+          <a href="mailto:polimap505@gmail.com">polimap505@gmail.com</a> desde tu correo institucional y te respondemos lo antes posible. Por tu cuenta
+          también puedes cerrar sesión desde tu foto de perfil, borrar tus comentarios y tus publicaciones de objetos perdidos y apagar las notificaciones.
         </p>
       </section>
 
       <section>
-        <h2>Contacto</h2>
+        <h2>Cambios a este aviso</h2>
         <p>
-          Equipo POLIMAP · <a href="mailto:polimap505@gmail.com">polimap505@gmail.com</a><br />
-          <a href="/">Volver a POLIMAP</a>
+          Si cambia algo importante, lo publicaremos en los avisos de la app y cambiaremos la fecha de arriba.
         </p>
+        <p><a href="/">← Volver a POLIMAP</a></p>
       </section>
     </main>
   </body>

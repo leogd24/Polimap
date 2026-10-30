@@ -9,20 +9,24 @@ import UserAvatar from '../components/UserAvatar.jsx';
 /**
  * Secciones del panel.
  *   maestro: true = solo la ve la cuenta maestra.
- *   nuevo:   true = lleva la etiqueta rosa "NUEVO" (funciones del panel v2).
  */
 export const SECTIONS = [
   { key: 'tablero', label: 'Tablero', icon: 'view_kanban' },
-  { key: 'mapa', label: 'Mapa de reportes', icon: 'map', nuevo: true },
-  { key: 'estadisticas', label: 'Estadísticas', icon: 'monitoring', nuevo: true },
-  { key: 'avisos', label: 'Avisos de la app', icon: 'campaign', nuevo: true },
+  { key: 'mapa', label: 'Mapa de reportes', icon: 'map' },
+  { key: 'estadisticas', label: 'Estadísticas', icon: 'monitoring' },
+  { key: 'avisos', label: 'Avisos de la app', icon: 'campaign' },
+  { key: 'comentarios', label: 'Comentarios', icon: 'forum' },
+  { key: 'perdidos', label: 'Objetos perdidos', icon: 'travel_explore' },
   { key: 'historial', label: 'Historial de cambios', icon: 'history' },
-  { key: 'accesos', label: 'Usuarios admin', icon: 'manage_accounts', maestro: true },
+  // Profesores, pruebas y consejales en una sola sección (los admins que no son
+  // maestros solo ven y designan consejales).
+  { key: 'accesos', label: 'Usuarios y consejales', icon: 'manage_accounts' },
 ];
 
-/// Props: user, current, onSelect, pending (sin atender), onLogout,
+/// Props: user, current, onSelect, pending (sin atender), flagged (comentarios por revisar), onLogout,
 ///        sound + onToggleSound (aviso con sonido de reportes nuevos)
-export default function Sidebar({ user, current, onSelect, pending, onLogout, sound, onToggleSound }) {
+///        oscuro + onApariencia (abre Apariencia y accesibilidad, compartida con la app)
+export default function Sidebar({ user, current, onSelect, pending, flagged = 0, onLogout, sound, onToggleSound, oscuro = false, onApariencia }) {
   const items = SECTIONS.filter((s) => !s.maestro || user.permisos.maestro);
 
   return (
@@ -66,12 +70,13 @@ export default function Sidebar({ user, current, onSelect, pending, onLogout, so
                   {pending} {pending === 1 ? 'nuevo' : 'nuevos'}
                 </span>
               )}
-              {item.nuevo && (
+              {item.key === 'comentarios' && flagged > 0 && (
                 <span
-                  className="px-[6px] py-[1px] text-[9px] font-black"
-                  style={{ backgroundColor: colors.magenta, color: colors.white, borderRadius: 6, letterSpacing: 0.5 }}
+                  className="whitespace-nowrap px-[10px] py-[2px] text-xs font-black"
+                  style={{ backgroundColor: colors.crimson, color: colors.white, borderRadius: 999 }}
+                  title="Comentarios reportados u ocultos"
                 >
-                  NUEVO
+                  {flagged} por revisar
                 </span>
               )}
             </button>
@@ -104,6 +109,18 @@ export default function Sidebar({ user, current, onSelect, pending, onLogout, so
             </button>
           </div>
         </div>
+        {onApariencia && (
+          <button
+            type="button"
+            onClick={onApariencia}
+            aria-label="Apariencia y accesibilidad"
+            title={`Apariencia y accesibilidad (ahora: ${oscuro ? 'oscuro' : 'claro'}). También cambia la app.`}
+            className="tappable flex h-10 w-10 items-center justify-center rounded-full border-0"
+            style={{ backgroundColor: alpha(colors.white, 0.1) }}
+          >
+            <Icon name={oscuro ? 'dark_mode' : 'light_mode'} size={20} color={colors.white} />
+          </button>
+        )}
         {onToggleSound && (
           <button
             type="button"

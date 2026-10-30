@@ -20,7 +20,7 @@
  *     salir            {}                                         → cierra la sesión de este dispositivo
  *     dev              { correo, destino }  SOLO en tu compu con 'modo_dev_login' => true
  *
- *   GET  /api/auth.php?diagnostico=1  → revisa Google, tablas y correo (sin datos secretos)
+ *   GET  /api/auth.php?diagnostico=1  → revisa Google, tablas, correo y push (sin datos secretos)
  *
  * Seguridad (lo importante):
  *   - Los códigos y las contraseñas se guardan como HASH, nunca en texto.
@@ -32,6 +32,7 @@ require __DIR__ . '/database.php';
 require __DIR__ . '/sesion.php';
 require __DIR__ . '/google.php';
 require __DIR__ . '/notificar.php';   // enviar_correo() para los códigos
+require __DIR__ . '/bitacora.php';    // entradas al panel e intentos fallidos
 
 const CODIGO_MINUTOS  = 10;   // cuánto dura un código
 const CODIGO_INTENTOS = 5;    // intentos por código
@@ -239,6 +240,7 @@ function crear_clave(array $datos): void
 
     db()->prepare('UPDATE accesos SET clave_hash = ?, intentos_fallidos = 0, bloqueado_hasta = NULL WHERE correo = ?')
         ->execute([password_hash($clave, PASSWORD_DEFAULT), $correo]);
+    bitacora('sesion', 'clave_creada', 'Panel', 'Creó o recuperó su contraseña con código', null, $correo);
     iniciar_sesion($correo, '', null, null, 'panel');
 }
 
@@ -259,6 +261,7 @@ function entrar_con_clave(array $datos): void
     if (!$fila) {
         // Mismo tiempo de respuesta aunque el correo no exista.
         password_hash($clave, PASSWORD_DEFAULT);
+        bitacora('sesion', 'clave_incorrecta', 'Panel', 'Correo que no está en la lista', null, $correo);
         error_json('Correo o contraseña incorrectos.', 401);
     }
     if ($fila['bloqueado_hasta'] && $fila['bloqueado_hasta'] > ahora()) {
@@ -272,9 +275,11 @@ function entrar_con_clave(array $datos): void
         if ($fallos >= CLAVE_FALLOS) {
             $pdo->prepare('UPDATE accesos SET intentos_fallidos = 0, bloqueado_hasta = ? WHERE id = ?')
                 ->execute([ahora(CLAVE_BLOQUEO), $fila['id']]);
+            bitacora('sesion', 'bloqueo', 'Panel', CLAVE_FALLOS . ' contraseñas incorrectas: bloqueada 15 min', null, $correo);
             error_json('Demasiados intentos. Espera 15 minutos o recupera tu contraseña con un código.', 429);
         }
         $pdo->prepare('UPDATE accesos SET intentos_fallidos = ? WHERE id = ?')->execute([$fallos, $fila['id']]);
+        bitacora('sesion', 'clave_incorrecta', 'Panel', "Intento $fallos de " . CLAVE_FALLOS, null, $correo);
         error_json('Correo o contraseña incorrectos.', 401);
     }
 
@@ -356,6 +361,7 @@ function iniciar_sesion(string $correo, string $nombre, ?string $foto, ?string $
     }
 
     crear_sesion((int) $id);
+    if ($destino === 'panel') bitacora('sesion', 'entrar', 'Panel', '', (int) $id, $correo);
 
     $stmt = $pdo->prepare('SELECT id, correo, nombre, foto FROM usuarios WHERE id = ?');
     $stmt->execute([$id]);
@@ -454,7 +460,30 @@ function diagnostico(): void
         $resultado['cuentasMaestras'] = (int) db()->query("SELECT COUNT(*) FROM accesos WHERE rol = 'maestro'")->fetchColumn();
         $resultado['tablasNuevas'] = true;
     } catch (Throwable $e) {
-        $resultado['tablasNuevas'] = false;   // falta importar sql/migracion-login.sql
+        $resultado['tablasNuevas'] = false;   // faltan tablas: importa sql/polimap.sql
+    }
+    // Salón en reportes + notificaciones push (sql/polimap.sql).
+    try {
+        db()->query('SELECT aula FROM reportes LIMIT 1');
+        db()->query('SELECT 1 FROM push_suscripciones LIMIT 1');
+        $resultado['tablasPush'] = true;
+    } catch (Throwable $e) {
+        $resultado['tablasPush'] = false;     // faltan tablas: importa sql/polimap.sql
+    }
+    // Avisos como posts y comentarios (sql/polimap.sql).
+    try {
+        db()->query('SELECT fijado FROM avisos LIMIT 1');
+        db()->query('SELECT 1 FROM avisos_comentarios LIMIT 1');
+        db()->query('SELECT 1 FROM moderacion_log LIMIT 1');
+        $resultado['tablasComentarios'] = true;
+    } catch (Throwable $e) {
+        $resultado['tablasComentarios'] = false;   // faltan tablas: importa sql/polimap.sql
+    }
+    try {
+        require_once __DIR__ . '/webpush.php';
+        $resultado['llavesPush'] = strlen(push_b64d(push_vapid()['publica'])) === 65;
+    } catch (Throwable $e) {
+        $resultado['llavesPush'] = 'ERROR: ' . $e->getMessage();
     }
     try {
         $resultado['certificadosGoogle'] = count(certificados_google());

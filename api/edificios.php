@@ -9,7 +9,7 @@
  *
  * Paso a paso:
  *   1. Lee los edificios.
- *   2. Lee espacios, servicios y trámites de una vez (3 consultas, no 30).
+ *   2. Lee espacios, servicios y trámites de una vez (tabla edificio_info, 1 consulta).
  *   3. Los acomoda dentro de cada edificio como arreglos.
  */
 require __DIR__ . '/database.php';
@@ -40,14 +40,12 @@ $espacios  = [];
 $servicios = [];
 $tramites  = [];
 
-foreach ($pdo->query('SELECT edificio_number, nombre FROM espacios ORDER BY edificio_number, orden, id') as $f) {
-    $espacios[$f['edificio_number']][] = $f['nombre'];
-}
-foreach ($pdo->query('SELECT edificio_number, nombre FROM servicios ORDER BY edificio_number, orden, id') as $f) {
-    $servicios[$f['edificio_number']][] = $f['nombre'];
-}
-foreach ($pdo->query('SELECT edificio_number, nombre, detalles FROM tramites ORDER BY edificio_number, orden, id') as $f) {
-    $tramites[$f['edificio_number']][] = ['name' => $f['nombre'], 'details' => $f['detalles'] ?? ''];
+// Una sola tabla con columna "tipo": espacio | servicio | tramite.
+foreach ($pdo->query('SELECT edificio_number, tipo, nombre, detalles FROM edificio_info ORDER BY edificio_number, orden, id') as $f) {
+    $n = $f['edificio_number'];
+    if ($f['tipo'] === 'espacio') $espacios[$n][] = $f['nombre'];
+    elseif ($f['tipo'] === 'servicio') $servicios[$n][] = $f['nombre'];
+    else $tramites[$n][] = ['name' => $f['nombre'], 'details' => $f['detalles'] ?? ''];
 }
 
 // 3) Armar cada edificio con los nombres de campusBuildings.js -------------

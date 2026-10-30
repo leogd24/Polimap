@@ -15,7 +15,7 @@ export default function Dialog({ icon, title, content, actionLabel, onAction }) 
       >
         {icon && (
           <div className="flex justify-center">
-            <Icon name={icon} size={52} color={colors.blue} />
+            <Icon name={icon} size={52} color={colors.ink} />
           </div>
         )}
         <h3 className="mt-4 mb-0 text-center text-xl font-bold">{title}</h3>

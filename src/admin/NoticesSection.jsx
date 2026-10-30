@@ -2,16 +2,30 @@
 // Sección "Avisos de la app": crear, editar y borrar los avisos que ven los
 // alumnos en Inicio (sección de Leo). La app solo muestra los vigentes:
 // los que tienen la fecha de hoy entre "desde" y "hasta".
+//
+// Notificaciones push: al publicar se puede marcar "Mandar notificación a los
+// celulares" (viene marcado en los urgentes). Le llega a quien tocó "Activar"
+// en Inicio de la app. Ver api/webpush.php y docs/notificaciones-push.md.
+//
+// Avisos como posts: fotos (hasta 5), "Fijar arriba" y "Permitir comentarios".
+// Formulario: NoticeEditor.jsx (estilo Google Forms), con "¿Quién lo ve?":
+// todos, consejales y subconsejales o solo consejales.
+// En cada tarjeta se ven los me gusta, los comentarios y cuántos están
+// reportados (botón "Revisar" → sección Comentarios).
+//
+// Encuestas rápidas (PollEditor.jsx): pregunta + 2 a 6 opciones; en la
+// tarjeta del aviso se ven los resultados. Ver docs/encuestas-perdidos.md.
 import { useEffect, useState } from 'react';
 import { colors } from '../styles/theme.js';
-import { getAllNotices, saveNotice, deleteNotice } from '../lib/api.js';
+import { getAllNotices, saveNotice, deleteNotice, getPushStatus, sendPushTest } from '../lib/api.js';
 import Card from '../components/Card.jsx';
 import Icon from '../components/Icon.jsx';
 import FilledButton from '../components/FilledButton.jsx';
 import EmptyState from '../components/EmptyState.jsx';
-import { TextField, TextArea, SelectField } from '../components/Inputs.jsx';
-import { SectionTitle, DateField, OutlineButton } from './ui.jsx';
-import { localDay } from './reportMeta.js';
+import { SectionTitle, OutlineButton } from './ui.jsx';
+import { localDay, formatDate } from './reportMeta.js';
+import { ResultadosEncuesta } from './PollEditor.jsx';
+import NoticeEditor, { AUDIENCIAS } from './NoticeEditor.jsx';
 
 const TYPES = [
   { value: 'general', label: 'General', icon: 'campaign', bg: colors.cyanTint, fg: colors.cyanDark },
@@ -24,14 +38,39 @@ function emptyNotice() {
   const today = new Date();
   const inTwoWeeks = new Date(today);
   inTwoWeeks.setDate(today.getDate() + 14);
-  return { title: '', content: '', type: 'general', startDate: localDay(today), endDate: localDay(inTwoWeeks) };
+  return {
+    title: '',
+    content: '',
+    type: 'general',
+    startDate: localDay(today),
+    endDate: localDay(inTwoWeeks),
+    notify: false, // se marca solo al elegir "Urgente"
+    photos: [],
+    files: [], // adjuntos: PDF, Word, Excel, PowerPoint
+    pinned: false,
+    allowComments: true,
+    poll: null, // encuesta rápida (PollEditor.jsx)
+    audience: 'todos', // todos | consejales | solo_consejales
+  };
 }
 
-export default function NoticesSection({ onMessage }) {
+/** "Notificación enviada a 12 celulares." a partir de la respuesta de la API. */
+function pushText(push) {
+  if (!push) return '';
+  if (push.error) return ` ${push.error}`;
+  if (push.apagado) return ' Las notificaciones están apagadas en el servidor.';
+  if (!push.suscritos) return ' Aún no hay celulares con notificaciones activadas.';
+  const fallas = push.fallidas ? ` (${push.fallidas} no se pudieron entregar)` : '';
+  return ` Notificación enviada a ${push.enviadas} ${push.enviadas === 1 ? 'celular' : 'celulares'}${fallas}.`;
+}
+
+export default function NoticesSection({ onMessage, onGoTo }) {
   const [notices, setNotices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null); // aviso en el formulario (null = cerrado)
   const [saving, setSaving] = useState(false);
+  const [push, setPush] = useState(null); // { activo, suscritos, misDispositivos }
+  const [testing, setTesting] = useState(false);
 
   function load() {
     setLoading(true);
@@ -39,6 +78,9 @@ export default function NoticesSection({ onMessage }) {
       .then(setNotices)
       .catch((error) => onMessage(`No se pudieron cargar los avisos: ${error.message}`))
       .finally(() => setLoading(false));
+    getPushStatus()
+      .then(setPush)
+      .catch(() => setPush(null)); // sin la migración todavía: no se muestra
   }
   useEffect(load, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -46,14 +88,41 @@ export default function NoticesSection({ onMessage }) {
     if (saving) return;
     setSaving(true);
     try {
-      await saveNotice(editing);
-      onMessage(editing.id ? 'Aviso actualizado.' : 'Aviso publicado en la app.');
+      // La encuesta se manda solo con lo que la API necesita (id y texto de cada opción).
+      const poll = editing.poll
+        ? { ...editing.poll, options: editing.poll.options.map((o) => ({ id: o.id, text: o.text })).filter((o) => o.text.trim()) }
+        : null;
+      const result = await saveNotice({ ...editing, poll });
+      onMessage((editing.id ? 'Aviso actualizado.' : 'Aviso publicado en la app.') + pushText(result.push));
       setEditing(null);
       load();
     } catch (error) {
       onMessage(error.message);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function resend(notice) {
+    if (!window.confirm(`¿Mandar otra vez "${notice.title}" como notificación a los celulares?`)) return;
+    try {
+      const result = await saveNotice({ ...notice, notify: true });
+      onMessage(`Aviso reenviado.${pushText(result.push)}`);
+      load();
+    } catch (error) {
+      onMessage(error.message);
+    }
+  }
+
+  async function test() {
+    setTesting(true);
+    try {
+      const r = await sendPushTest();
+      onMessage(`Prueba enviada a ${r.enviadas} de tus ${r.suscritos} dispositivo(s). Revisa tu celular.`);
+    } catch (error) {
+      onMessage(error.message);
+    } finally {
+      setTesting(false);
     }
   }
 
@@ -78,33 +147,32 @@ export default function NoticesSection({ onMessage }) {
         </FilledButton>
       </SectionTitle>
 
-      {editing && (
-        <Card className="mb-5 p-5" style={{ border: `2px solid ${colors.blue}` }}>
-          <h2 className="m-0 mb-4 text-lg font-black">{editing.id ? 'Editar aviso' : 'Nuevo aviso'}</h2>
-          <div className="grid gap-3">
-            <TextField value={editing.title} onChange={set('title')} placeholder="Título (ej. Corte de agua en el edificio 3)" prefixIcon="title" />
-            <TextArea value={editing.content} onChange={set('content')} placeholder="Detalle del aviso" minRows={3} maxLength={2000} />
-            <div className="grid gap-3 sm:grid-cols-3">
-              <SelectField
-                value={editing.type}
-                onChange={(v) => set('type')(v ?? 'general')}
-                placeholder="Tipo"
-                prefixIcon="label"
-                options={TYPES.map((t) => ({ value: t.value, label: t.label }))}
-              />
-              <DateField label="Desde" value={editing.startDate} onChange={set('startDate')} />
-              <DateField label="Hasta" value={editing.endDate} onChange={set('endDate')} />
+      {/* Notificaciones push: cuántos celulares las tienen activadas */}
+      {push && (
+        <Card className="mb-5 flex flex-wrap items-center gap-3 p-4">
+          <span
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
+            style={{ backgroundColor: colors.cyanTint }}
+          >
+            <Icon name="notifications_active" color={colors.cyanDark} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="font-black">
+              {push.suscritos} {push.suscritos === 1 ? 'celular tiene' : 'celulares tienen'} las notificaciones activadas
             </div>
-            <div className="flex flex-wrap justify-end gap-2">
-              <OutlineButton icon="close" onClick={() => setEditing(null)}>
-                Cancelar
-              </OutlineButton>
-              <FilledButton icon={saving ? 'hourglass_top' : 'publish'} onClick={save} style={{ opacity: saving ? 0.6 : 1 }}>
-                {editing.id ? 'Guardar cambios' : 'Publicar aviso'}
-              </FilledButton>
+            <div className="text-sm" style={{ color: colors.textSecondary }}>
+              Se activan en la app: Inicio → “Avisos en tu celular”. Tus dispositivos: {push.misDispositivos}.
             </div>
           </div>
+          <OutlineButton icon={testing ? 'hourglass_top' : 'send'} onClick={test}>
+            Enviar prueba a mi celular
+          </OutlineButton>
         </Card>
+      )}
+
+      {/* Formulario estilo Google Forms (NoticeEditor.jsx) */}
+      {editing && (
+        <NoticeEditor value={editing} onChange={(fn) => setEditing((n) => (typeof fn === 'function' ? fn(n) : fn))} push={push} saving={saving} onSave={save} onCancel={() => setEditing(null)} onMessage={onMessage} />
       )}
 
       {!loading && notices.length === 0 ? (
@@ -115,14 +183,27 @@ export default function NoticesSection({ onMessage }) {
             const t = typeInfo(notice.type);
             return (
               <Card key={notice.id} className="flex gap-3 p-4" style={{ opacity: notice.vigente ? 1 : 0.6 }}>
-                <span
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
-                  style={{ backgroundColor: t.bg }}
-                >
-                  <Icon name={t.icon} color={t.fg} />
-                </span>
+                {notice.photos?.length ? (
+                  <span className="relative h-16 w-16 shrink-0 overflow-hidden" style={{ borderRadius: 14 }}>
+                    <img src={notice.photos[0]} alt="" className="h-full w-full object-cover" />
+                    {notice.photos.length > 1 && (
+                      <span className="absolute bottom-1 right-1 flex items-center px-1 text-[10px] font-black" style={{ backgroundColor: colors.blueDeep, color: colors.white, borderRadius: 5 }}>
+                        <Icon name="photo_library" size={11} color={colors.white} />
+                        {notice.photos.length}
+                      </span>
+                    )}
+                  </span>
+                ) : (
+                  <span
+                    className="flex h-16 w-16 shrink-0 items-center justify-center"
+                    style={{ backgroundColor: t.bg, borderRadius: 14 }}
+                  >
+                    <Icon name={t.icon} color={t.fg} />
+                  </span>
+                )}
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
+                    {notice.pinned && <Icon name="push_pin" size={16} color={colors.textSecondary} />}
                     <span className="font-black">{notice.title}</span>
                     <span
                       className="px-2 py-[2px] text-[11px] font-black"
@@ -134,18 +215,61 @@ export default function NoticesSection({ onMessage }) {
                     >
                       {notice.vigente ? 'VISIBLE EN LA APP' : 'NO VISIBLE'}
                     </span>
+                    {notice.audience && notice.audience !== 'todos' && (
+                      <span className="inline-flex items-center gap-1 px-2 py-[2px] text-[11px] font-black" style={{ backgroundColor: colors.magentaTint, color: colors.magentaDark, borderRadius: 8 }}>
+                        <Icon name={notice.audience === 'grupo' ? 'groups' : 'how_to_reg'} size={13} color={colors.magentaDark} />
+                        {notice.audience === 'grupo' ? `SOLO ${notice.group} · DE SU CONSEJAL` : AUDIENCIAS.find((a) => a.value === notice.audience)?.label.toUpperCase()}
+                      </span>
+                    )}
                   </div>
                   {notice.content && (
                     <p className="m-0 mt-1 line-clamp-3 text-sm" style={{ color: colors.textSecondary }}>
                       {notice.content}
                     </p>
                   )}
+                  {notice.poll && <ResultadosEncuesta poll={notice.poll} />}
                   <div className="mt-2 text-xs" style={{ color: colors.textMuted }}>
                     {t.label} · del {notice.startDate} al {notice.endDate}
+                    {notice.notifiedAt && (
+                      <span className="ml-1 inline-flex items-center gap-[2px]" title="Se mandó como notificación">
+                        · <Icon name="notifications_active" size={14} color={colors.cyanDark} /> notificado el {formatDate(notice.notifiedAt)}
+                      </span>
+                    )}
+                  </div>
+                  {/* Cómo le fue en la app */}
+                  <div className="mt-2 flex flex-wrap items-center gap-3 text-xs font-bold" style={{ color: colors.textSecondary }}>
+                    <span className="inline-flex items-center gap-1">
+                      <Icon name="favorite" size={15} color={colors.crimson} />
+                      {notice.likes ?? 0}
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <Icon name={notice.allowComments ? 'mode_comment' : 'comments_disabled'} size={15} color={colors.textSecondary} />
+                      {notice.allowComments ? notice.comments ?? 0 : 'cerrados'}
+                    </span>
+                    {notice.files?.length > 0 && (
+                      <span className="inline-flex items-center gap-1" title={notice.files.map((f) => f.name).join('\n')}>
+                        <Icon name="attach_file" size={15} color={colors.textSecondary} />
+                        {notice.files.length} {notice.files.length === 1 ? 'archivo' : 'archivos'}
+                      </span>
+                    )}
+                    {notice.flagged > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => onGoTo?.('comentarios')}
+                        className="inline-flex items-center gap-1 border-0 px-2 py-[2px] text-xs font-black"
+                        style={{ backgroundColor: colors.crimsonTint, color: colors.crimsonDark, borderRadius: 8 }}
+                      >
+                        <Icon name="flag" size={14} color={colors.crimsonDark} />
+                        {notice.flagged} por revisar
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="flex shrink-0 flex-col gap-1">
-                  <IconAction icon="edit" label="Editar" onClick={() => setEditing({ ...notice })} />
+                  <IconAction icon="edit" label="Editar" onClick={() => setEditing({ ...notice, notify: false })} />
+                  {push && notice.vigente && (
+                    <IconAction icon="send" label="Mandar como notificación" onClick={() => resend(notice)} />
+                  )}
                   <IconAction icon="delete" label="Borrar" onClick={() => remove(notice)} danger />
                 </div>
               </Card>

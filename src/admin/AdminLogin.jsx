@@ -130,7 +130,7 @@ export default function AdminLogin({ session, hint, onLoggedIn }) {
           ) : (
             <>
               <div className="mb-4 flex items-start gap-2 text-sm" style={{ color: colors.textSecondary, lineHeight: 1.4 }}>
-                <Icon name="key" size={20} color={colors.blue} />
+                <Icon name="key" size={20} color={colors.ink} />
                 <span>
                   Te mandaremos un código a tu correo designado. Con él creas tu contraseña (o la cambias si la
                   olvidaste).
@@ -166,7 +166,7 @@ export default function AdminLogin({ session, hint, onLoggedIn }) {
               <FilledButton
                 icon="science"
                 className="w-full"
-                background={colors.goldDark}
+                background={colors.goldSolid}
                 onClick={() => email.trim() && handle(loginDev(email.trim(), 'panel'))}
               >
                 Entrar sin contraseña (solo XAMPP)

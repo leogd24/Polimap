@@ -24,7 +24,7 @@ export default function RouteStop({ building, isFirst, isLast, onTap }) {
             boxShadow: `0 5px 12px ${alpha(building.color, 0.28)}`,
           }}
         >
-          <span className="text-[17px] font-black" style={{ color: colors.white }}>
+          <span className="text-[1.0625rem] font-black" style={{ color: colors.white }}>
             {building.number}
           </span>
         </div>
@@ -46,7 +46,7 @@ export default function RouteStop({ building, isFirst, isLast, onTap }) {
           }}
         >
           <div className="min-w-0 flex-1">
-            <div className="text-[11px] font-bold" style={{ color: building.color }}>
+            <div className="text-[0.6875rem] font-bold" style={{ color: building.color }}>
               Edificio {building.number}
             </div>
             <div className="mt-[2px] text-base font-black" style={{ lineHeight: 1.15 }}>

@@ -11,11 +11,18 @@
 //   4. Menú lateral con 6 secciones (la de Accesos solo para el maestro).
 //      La sección elegida queda en la dirección (#mapa, #avisos…).
 //
+// Apariencia y accesibilidad: botón en el menú (y arriba en celular) que abre
+// la MISMA hoja de la app (tema claro/oscuro/automático, tamaño de letra, alto
+// contraste y menos movimiento). Es el mismo ajuste (src/lib/tema.js): si lo
+// cambias aquí, la app también, y al revés.
+//
 // La seguridad real está en el servidor: sin sesión de admin la API
 // responde 401/403 y no entrega nada.
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { colors, alpha } from '../styles/theme.js';
-import { getSession, logout, getAllReports, getBuildings, updateReport } from '../lib/api.js';
+import { getSession, logout, getAllReports, getBuildings, updateReport, getModeration } from '../lib/api.js';
+import { useApariencia } from '../lib/tema.js';
+import AparienciaSheet from '../components/AparienciaSheet.jsx';
 import Icon from '../components/Icon.jsx';
 import Snackbar from '../components/Snackbar.jsx';
 import PolimapLogo from '../components/PolimapLogo.jsx';
@@ -24,13 +31,15 @@ import Sidebar, { SECTIONS } from './Sidebar.jsx';
 import DashboardSection from './DashboardSection.jsx';
 import StatsSection from './StatsSection.jsx';
 import NoticesSection from './NoticesSection.jsx';
+import ModerationSection from './ModerationSection.jsx';
+import LostSection from './LostSection.jsx';
 import HistorySection from './HistorySection.jsx';
 import AccessSection from './AccessSection.jsx';
+// Todo el panel va en un solo archivo (sin descargas aparte), mapa incluido.
+import MapSection from './MapSection.jsx';
 import ReportDetail from './ReportDetail.jsx';
-import { EMPTY_FILTERS, stateInfo, locationText, timeAgo } from './reportMeta.js';
+import { EMPTY_FILTERS, stateInfo, locationWithRoom, timeAgo } from './reportMeta.js';
 
-// El mapa trae Leaflet (pesado): se descarga solo al abrir esa sección.
-const MapSection = lazy(() => import('./MapSection.jsx'));
 
 const REFRESH_MS = 30000;
 const SOUND_KEY = 'polimap.admin.sonido';
@@ -69,7 +78,8 @@ function playDing() {
 }
 
 function sectionFromHash() {
-  const key = window.location.hash.replace('#', '');
+  // #consejales ahora vive dentro de "Usuarios y consejales" (#accesos).
+  const key = window.location.hash.replace('#', '') === 'consejales' ? 'accesos' : window.location.hash.replace('#', '');
   return SECTIONS.some((s) => s.key === key) ? key : 'tablero';
 }
 
@@ -131,6 +141,13 @@ export default function AdminApp() {
 // Panel con sesión
 // ---------------------------------------------------------------------------
 function Panel({ user, onLogout }) {
+  // --- Modo día/noche (compartido con la app) -------------------------------
+  // Las MISMAS opciones que la app (tema, letra, contraste, movimiento): AparienciaSheet.
+  const [apariencia, cambiarApariencia] = useApariencia();
+  const [aparienciaOpen, setAparienciaOpen] = useState(false);
+  const oscuro =
+    apariencia.tema === 'oscuro' || (apariencia.tema === 'auto' && typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches);
+
   const [section, setSection] = useState(sectionFromHash);
   const [drawer, setDrawer] = useState(false);
   const [reports, setReports] = useState([]);
@@ -143,6 +160,8 @@ function Panel({ user, onLogout }) {
   const [sound, setSound] = useState(readSound);
   const [newFolios, setNewFolios] = useState(() => new Set());
   const [historyKey, setHistoryKey] = useState(0);
+  // Filtro con el que se abre el Historial (p. ej. "Ver su historial" desde Usuarios admin).
+  const [historyPreset, setHistoryPreset] = useState(null);
   const knownFolios = useRef(null); // folios que ya conocíamos (null = primera carga)
   const [, setTick] = useState(0); // re-dibuja "hace X s"
 
@@ -194,6 +213,18 @@ function Panel({ user, onLogout }) {
 
   useEffect(() => {
     getBuildings().then(setBuildings);
+  }, []);
+
+  // Comentarios por revisar (reportados u ocultos): número rojo en el menú "Comentarios".
+  const [flagged, setFlagged] = useState(0);
+  useEffect(() => {
+    const contar = () =>
+      getModeration()
+        .then((d) => setFlagged(d.revisar.length))
+        .catch(() => {}); // sin la migración todavía: no pasa nada
+    contar();
+    const timer = setInterval(() => document.visibilityState === 'visible' && contar(), 60000);
+    return () => clearInterval(timer);
   }, []);
 
   // "Actualizado hace X s" se redibuja cada 5 s.
@@ -268,7 +299,7 @@ function Panel({ user, onLogout }) {
 
   const shared = { reports, buildings, buildingNames, filters, onFiltersChange: setFilters, onOpen: openReport };
   const current = SECTIONS.find((s) => s.key === section && (!s.maestro || user.permisos.maestro)) ? section : 'tablero';
-  const sidebarProps = { user, current, onSelect: go, pending, onLogout, sound, onToggleSound: toggleSound };
+  const sidebarProps = { user, current, onSelect: go, pending, flagged, onLogout, sound, onToggleSound: toggleSound, oscuro, onApariencia: () => setAparienciaOpen(true) };
 
   return (
     <div className="min-h-full lg:pl-[290px]" style={{ backgroundColor: colors.background }}>
@@ -316,6 +347,7 @@ function Panel({ user, onLogout }) {
           {loading ? 'Actualizando…' : lastUpdate ? `Actualizado ${timeAgo(lastUpdate.toISOString())}` : ''}
         </span>
         <span className="flex-1" />
+        <TopButton icon="contrast" label="Apariencia y accesibilidad" onClick={() => setAparienciaOpen(true)} />
         <TopButton icon={sound ? 'notifications_active' : 'notifications_off'} label={sound ? 'Sonido activado' : 'Sonido apagado'} onClick={toggleSound} />
         <TopButton icon="refresh" label="Actualizar" onClick={() => loadReports()} />
       </header>
@@ -333,22 +365,28 @@ function Panel({ user, onLogout }) {
             user={user}
           />
         )}
-        {current === 'mapa' && (
-          <Suspense fallback={<p style={{ color: colors.textMuted }}>Cargando mapa…</p>}>
-            <MapSection {...shared} />
-          </Suspense>
-        )}
-        {current === 'estadisticas' && <StatsSection {...shared} />}
-        {current === 'avisos' && <NoticesSection onMessage={setMessage} />}
-        {current === 'historial' && <HistorySection onOpen={openReport} onMessage={setMessage} refreshKey={historyKey} />}
-        {current === 'accesos' && <AccessSection onMessage={setMessage} />}
+        {current === 'mapa' && <MapSection {...shared} />}
+        {current === 'estadisticas' && <StatsSection {...shared} user={user} onMessage={setMessage} />}
+        {current === 'avisos' && <NoticesSection onMessage={setMessage} onGoTo={go} />}
+        {current === 'comentarios' && <ModerationSection onMessage={setMessage} onChanged={setFlagged} esMaestro={Boolean(user.permisos.maestro)} />}
+        {current === 'perdidos' && <LostSection onMessage={setMessage} />}
+        {current === 'historial' && <HistorySection onOpen={openReport} onMessage={setMessage} refreshKey={historyKey} preset={historyPreset} />}
+        {current === 'accesos' && <AccessSection esMaestro={user.permisos.maestro} onMessage={setMessage} onShowHistory={(f) => { setHistoryPreset({ ...f }); go('historial'); }} />}
       </main>
+
+      <AparienciaSheet
+        open={aparienciaOpen}
+        onClose={() => setAparienciaOpen(false)}
+        prefs={apariencia}
+        onCambiar={cambiarApariencia}
+        subtitulo="Es la misma de la app: si la cambias aquí, también cambia allá."
+      />
 
       {selected && (
         <ReportDetail
           key={`${selected.folio}-${selected.updatedAt}`}
           report={selected}
-          location={locationText(selected, buildingNames)}
+          location={locationWithRoom(selected, buildingNames)}
           onClose={() => setSelectedFolio(null)}
           onSaved={handleSaved}
           onError={setMessage}

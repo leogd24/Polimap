@@ -96,6 +96,8 @@ jobs:
             config.php
             uploads/**
             cache/google-certs.json
+            cache/vapid-keys.php
+            cache/vapid.lock
 
       - name: Resumen
         run: |

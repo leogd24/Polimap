@@ -5,7 +5,7 @@ import Icon from './Icon.jsx';
 export default function DetailTitle({ icon, title }) {
   return (
     <div className="flex items-center">
-      <Icon name={icon} size={21} color={colors.blue} />
+      <Icon name={icon} size={21} color={colors.ink} />
       <span className="ml-2 text-lg font-black">{title}</span>
     </div>
   );

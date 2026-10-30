@@ -51,8 +51,35 @@
   --color-surface: #ffffff;
   --color-border: #dce3ed;
   --color-text-primary: #14203a;
-  --color-text-secondary: #5d6980;
-  --color-text-muted: #93a0b5;
+  --color-text-secondary: #4e5a70; /* 6.4:1 sobre el fondo (accesibilidad) */
+  --color-text-muted: #5f6b82; /* 4.9:1 sobre el fondo: antes #93a0b5 no se leía bien */
+
+  /* "Tinta": el noche cuando se usa como TEXTO, ÍCONO o BORDE sobre tarjetas.
+     En modo claro es igual a --color-blue; en oscuro se aclara para leerse. */
+  --color-ink: #14203a;
+
+  /* Versiones "sólidas" para FONDOS con texto blanco (no cambian en modo
+     oscuro, a diferencia de las -dark que en oscuro se aclaran para texto). */
+  --color-cyan-solid: #006a96;
+  --color-crimson-solid: #b71c30;
+  --color-gold-solid: #a35700;
+  --color-green-solid: #1e7a2e;
+  --color-magenta-solid: #b0155f;
+
+  /* Esquema de edificios del panel (concreto, vidrio, cielo y pasto como
+     en las fotos del Poli). Solo los usa src/admin/BuildingSchematic.jsx. */
+  --color-concrete: #c8c6c0;
+  --color-concrete-light: #e3e1db;
+  --color-concrete-dark: #9a978f;
+  --color-concrete-shadow: #6e6b64;
+  --color-door: #ddd3bd; /* cortinas color crema de la planta baja */
+  --color-window: #3d4b5f;
+  --color-window-lit: #ffe3a3; /* focos encendidos de noche */
+  --color-sky-day: #8fc1ea;
+  --color-sky-day-low: #e8f2fb;
+  --color-sky-dusk: #f3c9a0;
+  --color-grass: #5f9e47;
+  --color-grass-dark: #3f7a32;
 
   /* Tipografía */
   --font-sans: 'Roboto', system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -64,3 +91,61 @@
   --radius-button: 16px;
   --radius-hero: 28px;
 }
+
+/* =====================================================================
+   MODO OSCURO (Alexis). Se activa con <html data-tema="oscuro">, que pone
+   src/lib/tema.js según lo que elija el alumno (Automático / Claro / Oscuro).
+   Solo cambian neutros, tintes y textos; las barras noche, los colores
+   oficiales y las versiones -solid se quedan igual.
+   Contrastes revisados: texto ≥ 5.8:1, textos de color sobre su tinte ≥ 6.7:1.
+   ===================================================================== */
+:root[data-tema='oscuro'] {
+  color-scheme: dark; /* calendarios, listas y barras del navegador en oscuro */
+  --color-background: #0b1220;
+  --color-surface: #151e30;
+  --color-border: #2b3852;
+  --color-text-primary: #e8edf5;
+  --color-text-secondary: #b3bdd0;
+  --color-text-muted: #8e9ab2;
+  --color-ink: #c3d0ea;
+
+  --color-blue-tint: #1d2a44;
+  --color-cyan-tint: #0e3040;
+  --color-crimson-tint: #3c1820;
+  --color-gold-tint: #3b2a12;
+  --color-green-tint: #123222;
+  --color-magenta-tint: #3b142b;
+
+  /* Las "-dark" son para texto: en oscuro van claras */
+  --color-cyan-dark: #6fd3ff;
+  --color-crimson-dark: #ff8a96;
+  --color-gold-dark: #ffb867;
+  --color-green-dark: #6edc86;
+  --color-magenta-dark: #ff7dbb;
+}
+
+/* =====================================================================
+   ACCESIBILIDAD (src/lib/tema.js)
+   ===================================================================== */
+/* Alto contraste: textos y bordes más marcados. */
+:root[data-contraste='alto'] {
+  --color-text-secondary: #2c374c;
+  --color-text-muted: #3f4a5f;
+  --color-border: #8a96ab;
+}
+:root[data-tema='oscuro'][data-contraste='alto'] {
+  --color-text-secondary: #dde4f0;
+  --color-text-muted: #c4cddd;
+  --color-border: #6b7a97;
+  --color-surface: #0f1726;
+}
+/* Menos movimiento: quita animaciones y transiciones. */
+:root[data-movimiento='reducido'] *,
+:root[data-movimiento='reducido'] *::before,
+:root[data-movimiento='reducido'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+

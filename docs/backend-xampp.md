@@ -14,8 +14,10 @@ Responsable: Alexis. Contrato de datos: [contrato-datos.md](contrato-datos.md).
    ```
    (Si ya lo tenías en otra carpeta, muévelo aquí, o cambia `XAMPP_FOLDER` en `vite.config.js`.)
 3. Abre el panel de XAMPP y da **Start** a **Apache** y **MySQL**.
-4. Entra a http://localhost/phpmyadmin → pestaña **Importar** → elige `sql/polimap.sql` → **Importar**.
-   Se crea la base `polimap` con los 10 edificios, trámites y el FAQ.
+4. Entra a http://localhost/phpmyadmin (página principal, sin elegir base) → **Importar** →
+   `sql/polimap.sql` → **Importar**. Es UN solo archivo: crea la base `polimap` (borra la
+   anterior), las 24 tablas con sus relaciones, los datos iniciales y el acomodo del
+   **Diseñador** (base polimap → Diseñador → Abrir página → POLIMAP).
 5. En la carpeta `api/`, copia `config.example.php` y renómbrala a `config.php`.
    Con XAMPP recién instalado no hay que cambiar nada (usuario `root`, sin contraseña).
    Cambia `admin_token` por una clave tuya.

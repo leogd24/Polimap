@@ -4,7 +4,9 @@
 //   Hoja "Resumen"   → encabezado POLIMAP, 6 indicadores, 4 tablas y 4 gráficas
 //                      nativas de Excel (estado, categoría, lugar y semanas).
 //   Hoja "Reportes"  → todos los reportes con formato: encabezado fijo, filtros,
-//                      fechas reales, colores por estado y prioridad.
+//                      fechas reales, colores por estado y prioridad, y el salón.
+//   Hoja "Horarios"  → mapa de calor día × hora (¿cuándo se reporta más?) y
+//                      los salones con más reportes.
 //   Hoja "Notas"     → cómo se calcula cada número y qué filtros se usaron.
 //
 // Los números del Resumen son FÓRMULAS (COUNTIF, COUNTIFS, AVERAGE) que leen la
@@ -15,10 +17,12 @@
 // XML a mano y se empacan con un ZIP sencillo (sin compresión), así no hay que
 // instalar nada con npm.
 //
-// Uso (DashboardSection.jsx):
+// Uso (StatsSection.jsx → tarjeta "Descargar en Excel"):
 //   import { downloadExcel } from './excelExport.js';
-//   downloadExcel(reportesFiltrados, nombresDeEdificios, { filtros: 'Edificio 3', autor: user.correo });
+//   downloadExcel(reportesFiltrados, nombresDeEdificios, { filtros: 'Edificio 3', periodo: 'Últimos 30 días', autor: user.correo });
 import { CATEGORIES, STATES, categoryInfo, stateInfo, priorityInfo, locationText } from './reportMeta.js';
+import { textoEspacio, buscarEspacio, nombrePiso } from '../data/buildingLayouts.js';
+import { zip, esc, limpiar, letra } from '../lib/xlsx.js';
 
 // ---------------------------------------------------------------------------
 // 1) Colores (Paleta Oficial del Politécnico, los mismos de theme.css)
@@ -52,18 +56,24 @@ const FUENTE = 'Arial';
 // 2) Función principal
 // ---------------------------------------------------------------------------
 
-/** Genera el .xlsx y lo descarga en el navegador. */
+/** Nombre del archivo: POLIMAP-reportes-2026-10-25_1030.xlsx */
+export function excelFileName(ahora = new Date()) {
+  return `POLIMAP-reportes-${fechaArchivo(ahora)}.xlsx`;
+}
+
+/** Genera el .xlsx y lo descarga en el navegador. Regresa el nombre del archivo. */
 export function downloadExcel(reports, buildingNames, opciones = {}) {
   const bytes = buildWorkbook(reports, buildingNames, opciones);
   const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `POLIMAP-reportes-${fechaArchivo(opciones.ahora || new Date())}.xlsx`;
+  link.download = excelFileName(opciones.ahora || new Date());
   document.body.appendChild(link);
   link.click();
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1500);
+  return link.download;
 }
 
 /**
@@ -79,6 +89,7 @@ export function buildWorkbook(reports, buildingNames = {}, opciones = {}) {
   const hojaReportes = construirReportes(filas, buildingNames, estilos, ahora);
   const resumen = construirResumen(filas, buildingNames, estilos, ahora, opciones, hojaReportes.rango);
   const notas = construirNotas(estilos, opciones, filas.length, ahora);
+  const horarios = construirHorarios(filas, estilos, ahora);
 
   const archivos = {
     '[Content_Types].xml': tiposDeContenido(resumen.graficas.length),
@@ -92,6 +103,7 @@ export function buildWorkbook(reports, buildingNames = {}, opciones = {}) {
     'xl/worksheets/_rels/sheet1.xml.rels': rels([['rId1', TIPO_DRAWING, '../drawings/drawing1.xml']]),
     'xl/worksheets/sheet2.xml': hojaReportes.xml,
     'xl/worksheets/sheet3.xml': notas,
+    'xl/worksheets/sheet4.xml': horarios,
     'xl/drawings/drawing1.xml': drawingXml(resumen.graficas),
     'xl/drawings/_rels/drawing1.xml.rels': rels(
       resumen.graficas.map((g, i) => [`rId${i + 1}`, TIPO_CHART, `../charts/chart${i + 1}.xml`]),
@@ -125,7 +137,9 @@ const COLUMNAS = [
   { titulo: 'Latitud', ancho: 11 },
   { titulo: 'Longitud', ancho: 12 },
   { titulo: 'Apoyos', ancho: 9 },
+  { titulo: 'Salón', ancho: 24 },
 ];
+const ULTIMA_COL = letra(COLUMNAS.length); // 'Q'
 const FILA_ENCABEZADO = 4; // los datos empiezan en la fila 5
 
 function construirReportes(filas, buildingNames, est, ahora) {
@@ -219,8 +233,8 @@ function construirReportes(filas, buildingNames, est, ahora) {
   hoja.alto(1, 30);
   hoja.alto(2, 18);
   hoja.alto(FILA_ENCABEZADO, 30);
-  hoja.unir(`A1:P1`);
-  hoja.unir(`A2:P2`);
+  hoja.unir(`A1:${ULTIMA_COL}1`);
+  hoja.unir(`A2:${ULTIMA_COL}2`);
   hoja.texto('A1', 'POLIMAP · Reportes de incidencias', s.titulo);
   hoja.texto('A2', `Escuela Politécnica "Ing. Jorge Matute Remus" · Generado el ${fechaLarga(ahora)}`, s.subtitulo);
   for (let col = 2; col <= COLUMNAS.length; col++) {
@@ -256,6 +270,8 @@ function construirReportes(filas, buildingNames, est, ahora) {
     else hoja.vacia(`O${f}`, s.coord);
     // Apoyos: alumnos que se sumaron con "A mí también me pasa".
     hoja.numero(`P${f}`, r.apoyos || 0, s.numero);
+    // Salón como en el horario oficial: "Aula E4-A05 (2º piso)".
+    hoja.texto(`Q${f}`, r.aula && r.edificioNumber ? textoEspacio(r.edificioNumber, r.aula) : '', s.texto);
   });
 
   const ultima = Math.max(FILA_ENCABEZADO + 1, FILA_ENCABEZADO + filas.length);
@@ -263,7 +279,7 @@ function construirReportes(filas, buildingNames, est, ahora) {
   const xml = hoja.xml({
     columnas: COLUMNAS.map((c) => c.ancho),
     congelar: { fila: FILA_ENCABEZADO + 1 },
-    filtro: `A${FILA_ENCABEZADO}:P${Math.max(FILA_ENCABEZADO + 1, ultima)}`,
+    filtro: `A${FILA_ENCABEZADO}:${ULTIMA_COL}${Math.max(FILA_ENCABEZADO + 1, ultima)}`,
     cuadricula: true,
     horizontal: true,
     colorPestana: C.ciano,
@@ -662,6 +678,7 @@ function construirNotas(est, opciones, total, ahora) {
   const lineas = [
     ['Archivo', `Exportado del panel de administración de POLIMAP el ${fechaLarga(ahora)}.`],
     ['Filtros', opciones.filtros || 'Ninguno: incluye todos los reportes.'],
+    ['Periodo', opciones.periodo || 'Todos los reportes'],
     ['Reportes incluidos', String(total)],
     [
       'Sin atender',
@@ -677,6 +694,8 @@ function construirNotas(est, opciones, total, ahora) {
       'Apoyos',
       'Alumnos que se sumaron al reporte con "A mí también me pasa" (sin contar a quien lo envió). Con 5 apoyos sube solo a urgente.',
     ],
+    ['Salón', 'Columna Q de "Reportes": el salón que eligió el alumno, con el nombre del horario oficial 2026B.'],
+    ['Horarios', 'Cuenta los reportes por día de la semana y hora en que llegaron (hora del Poli, Zapopan). Más oscuro = más reportes.'],
     ['Enviado por', 'Si el alumno marcó "anónimo", aparece como Anónimo y no se exporta su nombre ni su correo.'],
     [
       'Privacidad',
@@ -691,6 +710,186 @@ function construirNotas(est, opciones, total, ahora) {
     hoja.alto(4 + i, v.length > 80 ? 30 : 16);
   });
   return hoja.xml({ columnas: [2, 20, 90], cuadricula: false, colorPestana: C.grisClaro });
+}
+
+// ---------------------------------------------------------------------------
+// 5b) Hoja "Horarios": mapa de calor día × hora y salones con más reportes
+// ---------------------------------------------------------------------------
+const DIAS_LARGOS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+const HORAS_EXCEL = Array.from({ length: 16 }, (_, i) => i + 6); // 6:00 a 21:00
+
+/** Mezcla un color con blanco: t = 1 → el color, t = 0 → blanco. */
+function mezclaHex(hex, t) {
+  const c = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  return c
+    .map((v) => Math.round(255 + (v - 255) * t).toString(16).padStart(2, '0'))
+    .join('')
+    .toUpperCase();
+}
+
+function construirHorarios(filas, est, ahora) {
+  const hoja = new Hoja();
+  const AZUL = '006A96'; // ciano oscuro (theme: --color-cyan-dark)
+  const s = {
+    titulo: est.id({ fuente: { tam: 16, negrita: true, color: C.blanco }, relleno: C.noche, vertical: 'center', indent: 1 }),
+    subtitulo: est.id({ fuente: { tam: 10, color: 'C9D3E6' }, relleno: C.noche, vertical: 'center', indent: 1 }),
+    seccion: est.id({ fuente: { tam: 12, negrita: true, color: C.noche }, vertical: 'center' }),
+    ayuda: est.id({ fuente: { tam: 9, cursiva: true, color: C.gris } }),
+    encabezado: est.id({
+      fuente: { tam: 9, negrita: true, color: C.blanco },
+      relleno: C.noche,
+      horizontal: 'center',
+      vertical: 'center',
+    }),
+    dia: est.id({ fuente: { tam: 10, negrita: true, color: C.noche }, relleno: C.nocheTinte, vertical: 'center', indent: 1 }),
+    total: est.id({
+      fuente: { tam: 10, negrita: true, color: C.noche },
+      relleno: C.nocheTinte,
+      horizontal: 'center',
+      vertical: 'center',
+    }),
+    texto: est.id({ fuente: { tam: 10 }, borde: { abajo: [C.borde, 'thin'] }, vertical: 'center' }),
+    numero: est.id({ fuente: { tam: 10 }, borde: { abajo: [C.borde, 'thin'] }, horizontal: 'center', vertical: 'center' }),
+    urgente: est.id({
+      fuente: { tam: 10, negrita: true, color: 'B71C30' },
+      borde: { abajo: [C.borde, 'thin'] },
+      horizontal: 'center',
+      vertical: 'center',
+    }),
+  };
+  // 6 tonos del mismo azul: 0 reportes (gris claro) … el máximo (azul oscuro).
+  const NIVELES = [0, 0.18, 0.36, 0.56, 0.78, 1];
+  const nivel = NIVELES.map((t, i) =>
+    est.id({
+      fuente: { tam: 10, negrita: i > 0, color: i >= 4 ? C.blanco : C.noche },
+      relleno: i === 0 ? C.fondo : mezclaHex(AZUL, t),
+      borde: { abajo: [C.blanco, 'thin'], der: [C.blanco, 'thin'] },
+      horizontal: 'center',
+      vertical: 'center',
+    }),
+  );
+
+  // Conteo día × hora (la fecha viene en hora del Poli).
+  const mapa = DIAS_LARGOS.map(() => HORAS_EXCEL.map(() => 0));
+  filas.forEach((r) => {
+    const f = r.createdAt || '';
+    const fecha = new Date(Number(f.slice(0, 4)), Number(f.slice(5, 7)) - 1, Number(f.slice(8, 10)));
+    const hora = Number(f.slice(11, 13));
+    if (Number.isNaN(fecha.getTime()) || Number.isNaN(hora)) return;
+    const d = (fecha.getDay() + 6) % 7;
+    const h = Math.min(HORAS_EXCEL.length - 1, Math.max(0, hora - HORAS_EXCEL[0]));
+    mapa[d][h] += 1;
+  });
+  const max = Math.max(1, ...mapa.flat());
+
+  // Encabezado oscuro (igual que las otras hojas)
+  const ultimaCol = 2 + HORAS_EXCEL.length + 1; // B + 16 horas + Total
+  hoja.alto(1, 30);
+  hoja.alto(2, 18);
+  hoja.unir(`A1:${letra(ultimaCol)}1`);
+  hoja.unir(`A2:${letra(ultimaCol)}2`);
+  hoja.texto('A1', 'POLIMAP · ¿Cuándo y dónde se reporta más?', s.titulo);
+  hoja.texto('A2', `Hora del Poli (Zapopan) · Generado el ${fechaLarga(ahora)}`, s.subtitulo);
+  for (let col = 2; col <= ultimaCol; col++) {
+    hoja.vacia(`${letra(col)}1`, s.titulo);
+    hoja.vacia(`${letra(col)}2`, s.subtitulo);
+  }
+
+  // Mapa de calor
+  hoja.texto('B4', 'Reportes por día y hora', s.seccion);
+  hoja.alto(4, 22);
+  hoja.texto('B5', 'Cada cuadro = reportes que llegaron en esa hora. Más oscuro = más reportes.', s.ayuda);
+  const F0 = 7; // fila de encabezado de horas
+  hoja.alto(F0, 20);
+  hoja.texto(`B${F0}`, 'Día', s.encabezado);
+  HORAS_EXCEL.forEach((h, i) => hoja.texto(`${letra(3 + i)}${F0}`, `${h}h`, s.encabezado));
+  hoja.texto(`${letra(ultimaCol)}${F0}`, 'Total', s.encabezado);
+  DIAS_LARGOS.forEach((dia, d) => {
+    const fila = F0 + 1 + d;
+    hoja.alto(fila, 24);
+    hoja.texto(`B${fila}`, dia, s.dia);
+    mapa[d].forEach((v, h) => {
+      const k = v === 0 ? 0 : Math.max(1, Math.round((v / max) * 5));
+      if (v) hoja.numero(`${letra(3 + h)}${fila}`, v, nivel[k]);
+      else hoja.vacia(`${letra(3 + h)}${fila}`, nivel[0]);
+    });
+    const total = mapa[d].reduce((a, b) => a + b, 0);
+    hoja.formula(`${letra(ultimaCol)}${fila}`, `SUM(C${fila}:${letra(ultimaCol - 1)}${fila})`, total, s.total);
+  });
+  const FT = F0 + 1 + DIAS_LARGOS.length; // fila de totales
+  hoja.alto(FT, 22);
+  hoja.texto(`B${FT}`, 'Total', s.total);
+  for (let col = 3; col <= ultimaCol; col++) {
+    const suma = col === ultimaCol ? filas.length : mapa.reduce((a, fila) => a + fila[col - 3], 0);
+    hoja.formula(`${letra(col)}${FT}`, `SUM(${letra(col)}${F0 + 1}:${letra(col)}${FT - 1})`, suma, s.total);
+  }
+  // Escala
+  const FE = FT + 2;
+  hoja.texto(`B${FE}`, 'Menos', s.ayuda);
+  NIVELES.forEach((_, i) => hoja.vacia(`${letra(3 + i)}${FE}`, nivel[i]));
+  hoja.texto(`${letra(3 + NIVELES.length)}${FE}`, 'Más', s.ayuda);
+
+  // Salones con más reportes
+  const FS = FE + 3;
+  hoja.texto(`B${FS}`, 'Salones con más reportes', s.seccion);
+  hoja.alto(FS, 22);
+  hoja.texto(`B${FS + 1}`, 'Solo los reportes donde el alumno eligió el salón (o lo escribió como "aula 5" / "E4-A05").', s.ayuda);
+  const cab = ['Edificio', 'Salón', 'Piso', 'Reportes', 'Sin resolver', 'Urgentes', 'Apoyos'];
+  const columnasSalon = [2, 3, 7, 9, 11, 13, 15]; // B, C (unida a F), G (unida a H), I, K, M, O
+  const uniones = [null, [3, 6], [7, 8], [9, 10], [11, 12], [13, 14], [15, 16]];
+  const FC = FS + 3;
+  hoja.alto(FC, 20);
+  cab.forEach((t, i) => {
+    const c = columnasSalon[i];
+    hoja.texto(`${letra(c)}${FC}`, t, s.encabezado);
+    if (uniones[i]) {
+      hoja.unir(`${letra(uniones[i][0])}${FC}:${letra(uniones[i][1])}${FC}`);
+      for (let k = uniones[i][0] + 1; k <= uniones[i][1]; k++) hoja.vacia(`${letra(k)}${FC}`, s.encabezado);
+    }
+  });
+  const salones = new Map();
+  filas.forEach((r) => {
+    if (!r.edificioNumber || !r.aula || !buscarEspacio(r.edificioNumber, r.aula)) return;
+    const key = `${r.edificioNumber}|${r.aula}`;
+    if (!salones.has(key)) salones.set(key, { n: r.edificioNumber, id: r.aula, total: 0, abiertos: 0, urgentes: 0, apoyos: 0 });
+    const x = salones.get(key);
+    x.total += 1;
+    if (r.estado !== 'resuelto') x.abiertos += 1;
+    if (r.estado !== 'resuelto' && r.prioridad === 'alta') x.urgentes += 1;
+    x.apoyos += r.apoyos || 0;
+  });
+  const lista = [...salones.values()].sort((a, b) => b.total - a.total || b.abiertos - a.abiertos).slice(0, 20);
+  if (!lista.length) {
+    hoja.texto(`B${FC + 1}`, 'Todavía no hay reportes con salón.', s.ayuda);
+  }
+  lista.forEach((x, i) => {
+    const f = FC + 1 + i;
+    const e = buscarEspacio(x.n, x.id);
+    hoja.numero(`B${f}`, x.n, s.numero);
+    hoja.unir(`C${f}:F${f}`);
+    hoja.texto(`C${f}`, e.nombre, s.texto);
+    for (let k = 4; k <= 6; k++) hoja.vacia(`${letra(k)}${f}`, s.texto);
+    hoja.unir(`G${f}:H${f}`);
+    hoja.texto(`G${f}`, nombrePiso(e.piso), s.numero);
+    hoja.vacia(`H${f}`, s.numero);
+    [
+      [9, x.total, s.numero],
+      [11, x.abiertos, s.numero],
+      [13, x.urgentes, x.urgentes ? s.urgente : s.numero],
+      [15, x.apoyos, s.numero],
+    ].forEach(([c, v, st]) => {
+      hoja.unir(`${letra(c)}${f}:${letra(c + 1)}${f}`);
+      hoja.numero(`${letra(c)}${f}`, v, st);
+      hoja.vacia(`${letra(c + 1)}${f}`, st);
+    });
+  });
+
+  return hoja.xml({
+    columnas: [2, 12, ...HORAS_EXCEL.map(() => 6), 8],
+    cuadricula: false,
+    horizontal: true,
+    colorPestana: AZUL,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -1085,6 +1284,7 @@ function workbookRels() {
     ['rId2', `${base}worksheet`, 'worksheets/sheet2.xml'],
     ['rId3', `${base}worksheet`, 'worksheets/sheet3.xml'],
     ['rId4', `${base}styles`, 'styles.xml'],
+    ['rId5', `${base}worksheet`, 'worksheets/sheet4.xml'],
   ]);
 }
 
@@ -1093,8 +1293,8 @@ function workbookXml(rango) {
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
     `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="${NS_R}">` +
     `<bookViews><workbookView activeTab="0"/></bookViews>` +
-    `<sheets><sheet name="Resumen" sheetId="1" r:id="rId1"/><sheet name="Reportes" sheetId="2" r:id="rId2"/><sheet name="Notas" sheetId="3" r:id="rId3"/></sheets>` +
-    `<definedNames><definedName name="_xlnm._FilterDatabase" localSheetId="1" hidden="1">Reportes!$A$${FILA_ENCABEZADO}:$P$${rango.ultima}</definedName>` +
+    `<sheets><sheet name="Resumen" sheetId="1" r:id="rId1"/><sheet name="Reportes" sheetId="2" r:id="rId2"/><sheet name="Horarios" sheetId="4" r:id="rId5"/><sheet name="Notas" sheetId="3" r:id="rId3"/></sheets>` +
+    `<definedNames><definedName name="_xlnm._FilterDatabase" localSheetId="1" hidden="1">Reportes!$A$${FILA_ENCABEZADO}:$${ULTIMA_COL}$${rango.ultima}</definedName>` +
     `<definedName name="_xlnm.Print_Titles" localSheetId="1">Reportes!$${FILA_ENCABEZADO}:$${FILA_ENCABEZADO}</definedName></definedNames>` +
     // fullCalcOnLoad: Excel recalcula todas las fórmulas al abrir el archivo.
     `<calcPr calcId="191029" fullCalcOnLoad="1"/>` +
@@ -1117,6 +1317,7 @@ function tiposDeContenido(numGraficas) {
     `<Override PartName="/xl/worksheets/sheet1.xml" ContentType="${base}.spreadsheetml.worksheet+xml"/>` +
     `<Override PartName="/xl/worksheets/sheet2.xml" ContentType="${base}.spreadsheetml.worksheet+xml"/>` +
     `<Override PartName="/xl/worksheets/sheet3.xml" ContentType="${base}.spreadsheetml.worksheet+xml"/>` +
+    `<Override PartName="/xl/worksheets/sheet4.xml" ContentType="${base}.spreadsheetml.worksheet+xml"/>` +
     `<Override PartName="/xl/styles.xml" ContentType="${base}.spreadsheetml.styles+xml"/>` +
     `<Override PartName="/xl/drawings/drawing1.xml" ContentType="${base}.drawing+xml"/>` +
     charts +
@@ -1148,98 +1349,13 @@ function coreXml(ahora, autor) {
 // 10) ZIP sencillo (sin compresión) — un .xlsx es un ZIP
 // ---------------------------------------------------------------------------
 
-const TABLA_CRC = (() => {
-  const t = new Uint32Array(256);
-  for (let n = 0; n < 256; n++) {
-    let c = n;
-    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-    t[n] = c >>> 0;
-  }
-  return t;
-})();
-
-function crc32(bytes) {
-  let c = 0xffffffff;
-  for (let i = 0; i < bytes.length; i++) c = TABLA_CRC[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
-  return (c ^ 0xffffffff) >>> 0;
-}
-
-function zip(archivos) {
-  const cod = new TextEncoder();
-  const partes = [];
-  const central = [];
-  let desplazamiento = 0;
-  for (const [nombre, contenido] of Object.entries(archivos)) {
-    const nombreB = cod.encode(nombre);
-    const datos = typeof contenido === 'string' ? cod.encode(contenido) : contenido;
-    const crc = crc32(datos);
-    const local = new DataView(new ArrayBuffer(30));
-    local.setUint32(0, 0x04034b50, true);
-    local.setUint16(4, 20, true);
-    local.setUint16(6, 0x0800, true); // nombres en UTF-8
-    local.setUint16(8, 0, true); // sin compresión
-    local.setUint32(14, crc, true);
-    local.setUint32(18, datos.length, true);
-    local.setUint32(22, datos.length, true);
-    local.setUint16(26, nombreB.length, true);
-    partes.push(new Uint8Array(local.buffer), nombreB, datos);
-
-    const cen = new DataView(new ArrayBuffer(46));
-    cen.setUint32(0, 0x02014b50, true);
-    cen.setUint16(4, 20, true);
-    cen.setUint16(6, 20, true);
-    cen.setUint16(8, 0x0800, true);
-    cen.setUint16(10, 0, true);
-    cen.setUint32(16, crc, true);
-    cen.setUint32(20, datos.length, true);
-    cen.setUint32(24, datos.length, true);
-    cen.setUint16(28, nombreB.length, true);
-    cen.setUint32(42, desplazamiento, true);
-    central.push(new Uint8Array(cen.buffer), nombreB);
-    desplazamiento += 30 + nombreB.length + datos.length;
-  }
-  const tamCentral = central.reduce((a, b) => a + b.length, 0);
-  const fin = new DataView(new ArrayBuffer(22));
-  fin.setUint32(0, 0x06054b50, true);
-  fin.setUint16(8, Object.keys(archivos).length, true);
-  fin.setUint16(10, Object.keys(archivos).length, true);
-  fin.setUint32(12, tamCentral, true);
-  fin.setUint32(16, desplazamiento, true);
-  const todo = [...partes, ...central, new Uint8Array(fin.buffer)];
-  const salida = new Uint8Array(todo.reduce((a, b) => a + b.length, 0));
-  let p = 0;
-  for (const parte of todo) {
-    salida.set(parte, p);
-    p += parte.length;
-  }
-  return salida;
-}
+// (crc32 y zip() están en src/lib/xlsx.js)
 
 // ---------------------------------------------------------------------------
 // 11) Ayudantes
 // ---------------------------------------------------------------------------
 
-/** Escapa &, <, > y comillas para XML. */
-function esc(texto) {
-  return String(texto).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-/** Quita caracteres de control que rompen el XML (los pueden traer los textos de los alumnos). */
-function limpiar(texto) {
-  // eslint-disable-next-line no-control-regex
-  return String(texto).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
-}
-
-/** 1 → A, 27 → AA */
-function letra(n) {
-  let s = '';
-  while (n > 0) {
-    const r = (n - 1) % 26;
-    s = String.fromCharCode(65 + r) + s;
-    n = Math.floor((n - 1) / 26);
-  }
-  return s;
-}
+// (esc, limpiar y letra están en src/lib/xlsx.js)
 
 function posicion(ref) {
   const m = /^([A-Z]+)(\d+)$/.exec(ref);

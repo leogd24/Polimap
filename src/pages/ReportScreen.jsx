@@ -6,22 +6,27 @@ import Card from '../components/Card.jsx';
 import FormLabel from '../components/FormLabel.jsx';
 import FilledButton from '../components/FilledButton.jsx';
 import Dialog from '../components/Dialog.jsx';
-import { SelectField, TextArea, Switch } from '../components/Inputs.jsx';
+import { TextArea, Switch } from '../components/Inputs.jsx';
+// Lista desplegable con diseño (íconos, descripciones y hoja que sube desde abajo).
+import PickerField from '../components/PickerField.jsx';
 import { createReport, getSimilarReports, supportReport } from '../lib/api.js';
 import { compressImage, formatBytes } from '../lib/compressImage.js';
 // Límites del campus que afinó Marcos (los mismos del mapa): así hay una sola fuente.
 import { CAMPUS } from '../components/CampusMap.jsx';
 import SimilarReports from '../components/SimilarReports.jsx';
+// Salones de cada edificio (salen de los horarios oficiales): para el punto exacto en el panel.
+import { opcionesSalon } from '../data/buildingLayouts.js';
 
 // value = clave de la base de datos (docs/contrato-datos.md), label = lo que se ve.
+// icon/color/description: solo para que la lista se vea clara (mismos íconos que el panel).
 const categories = [
-  { value: 'basura', label: 'Basura' },
-  { value: 'mobiliario', label: 'Mobiliario dañado' },
-  { value: 'banos', label: 'Baños en mal estado' },
-  { value: 'fuga', label: 'Fuga de agua' },
-  { value: 'iluminacion', label: 'Iluminación' },
-  { value: 'riesgo', label: 'Riesgo o desperfecto' },
-  { value: 'otro', label: 'Otro' },
+  { value: 'basura', label: 'Basura', icon: 'delete', color: colors.greenDark, description: 'Botes llenos o basura tirada' },
+  { value: 'mobiliario', label: 'Mobiliario dañado', icon: 'chair', color: colors.goldDark, description: 'Sillas, mesas, pizarrón, puertas' },
+  { value: 'banos', label: 'Baños en mal estado', icon: 'wc', color: colors.cyanDark, description: 'Sin agua, sucios o descompuestos' },
+  { value: 'fuga', label: 'Fuga de agua', icon: 'water_drop', color: colors.cyanDark, description: 'Goteras, tubos o llaves que tiran agua · urgente' },
+  { value: 'iluminacion', label: 'Iluminación', icon: 'lightbulb', color: colors.goldDeep, description: 'Focos fundidos o lámparas que parpadean' },
+  { value: 'riesgo', label: 'Riesgo o desperfecto', icon: 'warning', color: colors.crimsonDark, description: 'Cables sueltos, vidrios rotos, algo peligroso · urgente' },
+  { value: 'otro', label: 'Otro', icon: 'more_horiz', color: colors.magentaDark, description: 'Cualquier otra cosa del campus' },
 ];
 
 // Mensajes del GPS: los mismos que usa el mapa (CampusMap.jsx), para que la app hable igual.
@@ -37,14 +42,55 @@ function insideCampus(lat, lng) {
   return lat >= south && lat <= north && lng >= west && lng <= east;
 }
 
+/**
+ * Ícono de cada edificio según lo que hay ahí. Si campusBuildings.js ya trae
+ * uno especial (ej. 'cable', 'wifi') se usa ese; si trae el genérico
+ * 'apartment', se elige por las palabras del resumen.
+ */
+function buildingIcon(building) {
+  if (building.icon && building.icon !== 'apartment') return building.icon;
+  const texto = `${building.summary} ${building.description}`.toLowerCase();
+  if (texto.includes('biblioteca')) return 'local_library';
+  if (texto.includes('biotecnolog') || texto.includes('alimentos')) return 'biotech';
+  if (texto.includes('audio') || texto.includes('video')) return 'mic';
+  if (texto.includes('taller') || texto.includes('manufactura')) return 'precision_manufacturing';
+  if (texto.includes('laboratorio')) return 'science';
+  return 'school'; // aulas
+}
+
+// Edificios: "Edificio 2" + lo que hay ahí ("Biblioteca y auditorio") como descripción,
+// con su ícono en un cuadrito del color del edificio (el mismo del mapa) y el número en la esquina.
 const locationOptions = [
-  ...campusBuildings.map((building) => ({
-    value: `Edificio ${building.number}`,
-    label: `Edificio ${building.number} · ${building.name}`,
-  })),
-  { value: 'Explanada', label: 'Explanada' },
-  { value: 'Otra zona', label: 'Otra zona' },
+  {
+    label: 'Edificios',
+    icon: 'apartment',
+    options: campusBuildings.map((building) => ({
+      value: `Edificio ${building.number}`,
+      label: `Edificio ${building.number}`,
+      description: building.summary || 'Aulas',
+      icon: buildingIcon(building),
+      badge: building.number,
+      color: building.color ?? colors.blue,
+    })),
+  },
+  {
+    label: 'Áreas abiertas',
+    icon: 'park',
+    options: [
+      { value: 'Explanada', label: 'Explanada', icon: 'park', color: colors.greenDark, description: 'Patio central, jardines y andadores' },
+      { value: 'Otra zona', label: 'Otra zona', icon: 'location_on', color: colors.magentaDark, description: 'Estacionamiento, canchas, entrada…' },
+    ],
+  },
 ];
+
+// Color de cada tipo de salón en la lista.
+const ROOM_COLORS = {
+  aula: colors.ink,
+  lab: colors.cyanDark,
+  taller: colors.goldDark,
+  banos: colors.cyanDark,
+  espacio: colors.magentaDark,
+};
 
 /// Equivalente de screens/report_screen.dart
 /// Login (Alexis): solo se muestra con sesión (MainShell). El reporte se envía
@@ -53,6 +99,8 @@ const locationOptions = [
 export default function ReportScreen({ user }) {
   const [category, setCategory] = useState(null);
   const [location, setLocation] = useState(null);
+  // Salón o espacio dentro del edificio (opcional): 'A05', 'L07', 'BAN'…
+  const [room, setRoom] = useState(null);
   const [anonymous, setAnonymous] = useState(true);
   // Foto elegida: { file, url }. `file` es lo que se enviará al servidor (paso 2)
   // y `url` es una dirección temporal para mostrar la miniatura.
@@ -200,6 +248,8 @@ export default function ReportScreen({ user }) {
     data.append('descripcion', description.trim());
     if (location.startsWith('Edificio ')) data.append('edificio_number', location.replace('Edificio ', ''));
     else data.append('zona', location);
+    // Salón (opcional): así el panel pone el punto en el salón exacto del esquema.
+    if (room && location.startsWith('Edificio ')) data.append('aula', room);
     data.append('anonimo', anonymous ? '1' : '0');
     // Foto (opcional): ya va comprimida. El servidor la guarda en api/uploads/.
     if (photo) data.append('foto', photo.file);
@@ -237,6 +287,7 @@ export default function ReportScreen({ user }) {
     if (failed) return; // si falló, conservamos lo escrito para reintentar
     setCategory(null);
     setLocation(null);
+    setRoom(null);
     setAnonymous(true);
     setPhoto(null);
     setGps(null);
@@ -269,10 +320,11 @@ export default function ReportScreen({ user }) {
         <FormLabel number="1" label="¿Qué ocurrió?" />
       </div>
       <div className="mt-[9px]">
-        <SelectField
+        <PickerField
           value={category}
           onChange={setCategory}
           placeholder="Selecciona una categoría"
+          title="¿Qué ocurrió?"
           prefixIcon="category"
           options={categories}
           error={errors.category}
@@ -283,15 +335,38 @@ export default function ReportScreen({ user }) {
         <FormLabel number="2" label="Ubicación" />
       </div>
       <div className="mt-[9px]">
-        <SelectField
+        <PickerField
           value={location}
-          onChange={setLocation}
+          onChange={(value) => {
+            setLocation(value);
+            setRoom(null); // otro edificio = otros salones
+          }}
           placeholder="Selecciona el edificio o zona"
+          title="¿Dónde está?"
           prefixIcon="location_on"
           options={locationOptions}
           error={errors.location}
         />
       </div>
+
+      {/* Salón (opcional): solo si eligió un edificio. Las opciones van por piso. */}
+      {location?.startsWith('Edificio ') && (
+        <div className="mt-[9px]">
+          <PickerField
+            value={room}
+            onChange={setRoom}
+            placeholder="Salón o espacio (opcional)"
+            title={`Salones del ${location}`}
+            prefixIcon="meeting_room"
+            clearable
+            options={opcionesSalon(Number(location.replace('Edificio ', ''))).map((g) => ({
+              label: g.label,
+              icon: g.piso === 1 ? 'door_front' : 'stairs',
+              options: g.opciones.map((o) => ({ ...o, color: ROOM_COLORS[o.tipo] ?? colors.ink })),
+            }))}
+          />
+        </div>
+      )}
 
       {/* GPS opcional: ayuda a ubicar el problema exacto dentro del edificio o zona */}
       <div className="mt-[9px]">
@@ -335,12 +410,12 @@ export default function ReportScreen({ user }) {
             className="tappable flex w-full items-center justify-center gap-2 px-3 py-[10px] font-bold"
             style={{
               backgroundColor: colors.surface,
-              color: colors.blue,
+              color: colors.ink,
               borderRadius: 'var(--radius-tile)',
               border: `1px dashed ${gpsError ? colors.crimson : colors.border}`,
             }}
           >
-            <Icon name={gpsLoading ? 'hourglass_top' : 'add_location_alt'} size={20} color={colors.blue} />
+            <Icon name={gpsLoading ? 'hourglass_top' : 'add_location_alt'} size={20} color={colors.ink} />
             {gpsLoading ? 'Obteniendo ubicación…' : 'Agregar mi ubicación GPS (opcional)'}
           </button>
         )}
@@ -442,7 +517,7 @@ export default function ReportScreen({ user }) {
               <FilledButton
                 icon="photo_library"
                 background={colors.blueTint}
-                foreground={colors.blue}
+                foreground={colors.ink}
                 className="w-full px-3"
                 onClick={() => galleryInput.current?.click()}
               >
@@ -475,14 +550,14 @@ export default function ReportScreen({ user }) {
 
       <Card>
         <div className="flex items-center px-4 py-3">
-          <Icon name="visibility_off" filled={false} color={colors.blue} />
+          <Icon name="visibility_off" filled={false} color={colors.ink} />
           <div className="ml-4 min-w-0 flex-1">
             <div>Enviar de forma anónima</div>
             <div className="text-sm" style={{ color: colors.textSecondary }}>
               No se mostrará información personal.
             </div>
           </div>
-          <Switch value={anonymous} onChange={setAnonymous} />
+          <Switch value={anonymous} onChange={setAnonymous} label="Enviar de forma anónima" />
         </div>
       </Card>
 

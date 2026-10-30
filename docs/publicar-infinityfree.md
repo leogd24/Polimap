@@ -26,15 +26,11 @@ Tu contraseña normal de Gmail no se usa en ningún lado.
    Anota: *MySQL Host* (`sqlXXX.infinityfree.com`), *Database name* (`if0_XXXX_polimap`),
    *Username* (`if0_XXXX`) y la contraseña de la cuenta de hosting.
 2. Abre **phpMyAdmin** de esa base.
-3. Abre `sql/polimap.sql` en VS Code y **borra estas 3 líneas del principio** (en el
-   hosting la base ya existe y no te deja crearla ni borrarla):
-   ```sql
-   DROP DATABASE IF EXISTS polimap;
-   CREATE DATABASE polimap CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-   USE polimap;
-   ```
-   Guarda esa copia como `polimap-hosting.sql` (no la subas a GitHub).
-4. phpMyAdmin → **Importar** → `polimap-hosting.sql`.
+3. `sql/polimap.sql` está hecho para XAMPP (crea la base `polimap`). En el hosting la base
+   ya existe y no te deja crearla: abre el archivo en VS Code, **borra las líneas
+   `CREATE DATABASE…`, `ALTER DATABASE…` y `USE polimap;`** y también todo lo de abajo de
+   "ACOMODO EN EL DISEÑADOR". Guárdalo como `polimap-hosting.sql` (no lo subas a GitHub)
+   y luego: pestaña **Importar** → `polimap-hosting.sql`. ⚠️ Borra los datos que hubiera.
 
 ## 4. Construir la app
 

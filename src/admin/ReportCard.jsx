@@ -9,9 +9,10 @@ import Icon from '../components/Icon.jsx';
 import StateChip from './StateChip.jsx';
 import { categoryInfo, priorityInfo, timeAgo, formatDate, formatDuration, resolutionDays } from './reportMeta.js';
 
-/** "Edif. 3" o el nombre de la zona: cabe en una línea del Kanban. */
+/** "Edif. 3 · A05" o el nombre de la zona: cabe en una línea del Kanban. */
 function shortPlace(report) {
-  return report.edificioNumber ? `Edif. ${report.edificioNumber}` : report.zona || 'Sin ubicación';
+  if (!report.edificioNumber) return report.zona || 'Sin ubicación';
+  return `Edif. ${report.edificioNumber}${report.aula ? ` · ${report.aula}` : ''}`;
 }
 
 /** Tercera línea de la tarjeta: lo más útil según el estado. */

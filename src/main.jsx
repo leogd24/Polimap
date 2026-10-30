@@ -2,6 +2,10 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
 import './styles/global.css';
+import { aplicarApariencia } from './lib/tema.js';
+
+// Tema oscuro, letra grande, alto contraste… (lo que eligió el alumno)
+aplicarApariencia();
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

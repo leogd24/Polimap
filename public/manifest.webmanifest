@@ -10,8 +10,76 @@
   "theme_color": "#14203A",
   "lang": "es",
   "icons": [
-    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Mi horario",
+      "short_name": "Horario",
+      "description": "Qué clase tienes ahora y en qué salón",
+      "url": "/?tab=horario",
+      "icons": [
+        {
+          "src": "/icons/atajo-horario.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Reportar un problema",
+      "short_name": "Reportar",
+      "description": "Reporta algo que está mal en el campus",
+      "url": "/?tab=reportar",
+      "icons": [
+        {
+          "src": "/icons/atajo-reportar.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Mapa del campus",
+      "short_name": "Mapa",
+      "url": "/?tab=mapa",
+      "icons": [
+        {
+          "src": "/icons/atajo-mapa.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Preguntar al asistente",
+      "short_name": "Asistente",
+      "description": "Trámites, edificios y dónde está un maestro",
+      "url": "/?asistente=1",
+      "icons": [
+        {
+          "src": "/icons/atajo-asistente.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
   ]
 }

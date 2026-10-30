@@ -2,7 +2,8 @@
 // Sección "Tablero" (la primera que se ve al entrar al panel).
 //
 // De arriba hacia abajo, igual que el diseño aprobado:
-//   1. Encabezado: título, "Actualizado hace X s", buscador, Filtros (n) y Exportar Excel.
+//   1. Encabezado: título, "Actualizado hace X s", buscador y Filtros (n).
+//      (Exportar Excel se movió a Estadísticas.)
 //   2. Cinco tarjetas de números (sin atender, en revisión, en proceso,
 //      resueltos del mes y tiempo promedio de solución).
 //   3. Mapa de calor del campus (últimos 30 días) + Reportes por categoría (mes actual).
@@ -20,12 +21,11 @@ import KanbanBoard from './KanbanBoard.jsx';
 import ReportCard from './ReportCard.jsx';
 import CampusHeatCard from './CampusHeatCard.jsx';
 import { OutlineButton, FilterFields } from './ui.jsx';
-import { downloadExcel } from './excelExport.js';
 import {
   CATEGORIES,
   applyFilters,
   activeFilterCount,
-  locationText,
+  locationWithRoom,
   resolutionDays,
   formatDuration,
   localDay,
@@ -63,7 +63,6 @@ export default function DashboardSection({
   lastUpdate,
   onRefresh,
   onGoTo,
-  user,
 }) {
   const [view, setView] = useState('kanban'); // 'kanban' | 'lista'
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -109,21 +108,6 @@ export default function DashboardSection({
         <OutlineButton icon="tune" onClick={() => setFiltersOpen(!filtersOpen)} active={filtersOpen}>
           {extraFilters ? `Filtros (${extraFilters})` : 'Filtros'}
         </OutlineButton>
-        <button
-          type="button"
-          onClick={() =>
-            downloadExcel(visible, buildingNames, {
-              filtros: describeFilters(filters, buildingNames),
-              autor: user?.correo,
-            })
-          }
-          title="Descarga un Excel con resumen, gráficas y la lista de reportes (respeta los filtros)"
-          className="tappable flex min-h-[48px] items-center gap-2 border-0 px-5 text-sm font-extrabold"
-          style={{ backgroundColor: colors.blue, color: colors.white, borderRadius: 'var(--radius-button)' }}
-        >
-          <Icon name="download" size={20} color={colors.white} />
-          Exportar Excel
-        </button>
       </div>
       {filtersOpen && (
         <div className="-mt-3 mb-5">
@@ -214,7 +198,7 @@ export default function DashboardSection({
             <ReportCard
               key={report.folio}
               report={report}
-              location={locationText(report, buildingNames)}
+              location={locationWithRoom(report, buildingNames)}
               onOpen={() => onOpen(report.folio)}
               isNew={newFolios.has(report.folio)}
             />
@@ -411,19 +395,3 @@ function computeKpis(reports) {
   };
 }
 
-/** Texto de los filtros activos para el encabezado del Excel: "Edificio 3 · Urgente". */
-function describeFilters(f, buildingNames) {
-  const partes = [];
-  if (f.search?.trim()) partes.push(`búsqueda "${f.search.trim()}"`);
-  if (f.categoria) partes.push(CATEGORIES[f.categoria]?.label ?? f.categoria);
-  if (f.edificio)
-    partes.push(
-      f.edificio === 'zona'
-        ? 'zonas abiertas'
-        : `Edificio ${f.edificio}${buildingNames[f.edificio] && buildingNames[f.edificio] !== `Edificio ${f.edificio}` ? ` (${buildingNames[f.edificio]})` : ''}`,
-    );
-  if (f.prioridad) partes.push(`prioridad ${f.prioridad === 'alta' ? 'urgente' : f.prioridad}`);
-  if (f.desde) partes.push(`desde ${f.desde}`);
-  if (f.hasta) partes.push(`hasta ${f.hasta}`);
-  return partes.join(' · ');
-}
