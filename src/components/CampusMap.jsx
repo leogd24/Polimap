@@ -8,9 +8,12 @@
 //   2. Pone un marcador por edificio (identificado por `number`, 1–10).
 //   3. Al tocar un marcador abre una hoja inferior (bottom sheet) tipo Google Maps.
 //   4. Botón dorado "Mi ubicación": GPS en tiempo real con punto azul que pulsa.
-//   5. Botón "Cómo llegar": traza una línea desde tu ubicación hasta el edificio.
-//   6. Edificios en 3D (cajitas con relieve) y pines 3D con brinco al tocarlos.
+//   5. Botón "Cómo llegar": ruta a pie POR LOS PASILLOS (src/data/campusPaths.js),
+//      con indicaciones paso a paso, opción sin escaleras, te sigue mientras
+//      caminas, se recalcula si te desvías y avisa cuando llegas.
+//   6. Edificios en 3D (cajitas con relieve) y gotas estilo Google Maps con brinco.
 //   7. Si estás fuera del Poli: el mapa se pinta de rojo 4 s con un aviso al centro.
+//   8. ?trazar → herramienta para dibujar los pasillos (CampusPathEditor.jsx).
 //
 // Dependencias (una sola vez):  npm install leaflet@1.9 react-leaflet@4
 // =====================================================================
@@ -26,6 +29,11 @@ import { colors } from '../styles/theme.js';
 import { getBuildings } from '../lib/api.js';
 // Ícono reutilizado del proyecto (Material Symbols).
 import Icon from './Icon';
+// Pasillos del Poli y el cálculo de rutas a pie.
+import { PASILLOS } from '../data/campusPaths.js';
+import { crearRed, calcularRuta, nodoMasCercano, distancia as metrosEntre } from '../lib/campusRouting.js';
+// Herramienta para trazar los pasillos (solo con ?trazar).
+import { useEditorPasillos, EditorCapas, EditorPanel } from './CampusPathEditor.jsx';
 
 // ---------------------------------------------------------------------
 // PASO 1. Configuración del campus (valores del proyecto)
@@ -111,9 +119,16 @@ const METROS_POR_PISO = 3.5;
 // norte: qué tanto sube; este: qué tanto se ladea a la derecha.
 const PERSPECTIVA = { norte: 0.55, este: 0.15 };
 
-// Tamaño de los marcadores de edificio (círculo con el número), en píxeles.
-// ⬇️ CAMBIA SOLO ESTE NÚMERO para hacerlos más chicos o más grandes (antes era 36).
+// Tamaño de los marcadores de edificio, en píxeles:
+//   TAMANO_PIN  → bolita 3D con el número (edificios NO seleccionados)
+//   TAMANO_GOTA → ancho de la gota estilo Google Maps (edificio SELECCIONADO)
+// ⬇️ Cambia estos números para hacerlos más chicos o más grandes.
 const TAMANO_PIN = 28;
+const TAMANO_GOTA = 26;
+
+// "Cómo llegar":
+const METROS_LLEGADA = 15; // a esta distancia de la entrada se considera que llegaste
+const MODO_TRAZAR = new URLSearchParams(window.location.search).has('trazar');
 
 // Velocidad promedio caminando (metros por segundo) para estimar minutos.
 const VELOCIDAD_CAMINANDO = 1.3;
@@ -199,20 +214,53 @@ function geometria3D(numero, centro) {
   return { cajas, cima };
 }
 
-// Marcador 3D: bolita con relieve, número, colita, sombra en el piso
-// y una "onda" dorada que sale cuando está activo.
-function iconoEdificio(numero, activo) {
+// Evita que un nombre con < o & rompa el HTML del marcador.
+function escaparHtml(texto) {
+  return String(texto).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+}
+
+// Marcador de cada edificio:
+//   - Normal: la bolita 3D con el número (la de antes).
+//   - Seleccionado: cambia a la gota estilo Google Maps (carmesí con punto oscuro),
+//     con el nombre a un lado; brinca y sale una onda dorada.
+const ALTO_GOTA = Math.round(TAMANO_GOTA * 1.55);
+function iconoEdificio(edificio, activo) {
+  if (!activo) {
+    return L.divIcon({
+      className: 'pm-pin-wrap', // reemplaza el estilo por defecto de Leaflet
+      html: `<div class="pm-pin">
+          <span class="pm-pin__sombra"></span>
+          <span class="pm-pin__cuerpo"><span>${edificio.number}</span></span>
+        </div>`,
+      iconSize: [TAMANO_PIN, TAMANO_PIN + 10],
+      iconAnchor: [TAMANO_PIN / 2, TAMANO_PIN + 6], // la punta de la colita toca el techo
+    });
+  }
+  const nombre = escaparHtml(edificio.name || `Edificio ${edificio.number}`);
+  const etiqueta = nombre.startsWith('Edificio') ? nombre : `${edificio.number} · ${nombre}`;
   return L.divIcon({
     className: 'pm-pin-wrap', // reemplaza el estilo por defecto de Leaflet
-    html: `<div class="pm-pin${activo ? ' is-active' : ''}">
-        <span class="pm-pin__onda"></span>
-        <span class="pm-pin__sombra"></span>
-        <span class="pm-pin__cuerpo"><span>${numero}</span></span>
+    html: `<div class="pm-gota${activo ? ' is-active' : ''}">
+        <span class="pm-gota__onda"></span>
+        <span class="pm-gota__sombra"></span>
+        <svg class="pm-gota__forma" viewBox="0 0 26 40" aria-hidden="true">
+          <path d="M13 1C6.4 1 1 6.3 1 12.9c0 8.7 10.2 19.6 11.1 25.6.1.6.5.9.9.9s.8-.3.9-.9C14.8 32.5 25 21.6 25 12.9 25 6.3 19.6 1 13 1z"/>
+          <circle cx="13" cy="13" r="4.6"/>
+        </svg>
+        <span class="pm-gota__nombre">${etiqueta}</span>
       </div>`,
-    iconSize: [TAMANO_PIN, TAMANO_PIN + 10],
-    iconAnchor: [TAMANO_PIN / 2, TAMANO_PIN + 6], // la punta de la colita toca el techo
+    iconSize: [TAMANO_GOTA, ALTO_GOTA],
+    iconAnchor: [TAMANO_GOTA / 2, ALTO_GOTA - 1], // la punta toca el techo del edificio
   });
 }
+
+// Banderita en la entrada del edificio cuando hay ruta.
+const ICONO_META = L.divIcon({
+  className: 'pm-pin-wrap',
+  html: '<div class="pm-meta"><span class="material-symbols-rounded">flag</span></div>',
+  iconSize: [26, 26],
+  iconAnchor: [13, 13],
+});
 
 // Punto azul del usuario con pulso (las animaciones están en ESTILOS).
 const ICONO_USUARIO = L.divIcon({
@@ -227,9 +275,9 @@ const ICONO_USUARIO = L.divIcon({
 // ---------------------------------------------------------------------
 
 // Ajusta el tamaño del mapa cuando cambia su contenedor y escucha toques al mapa.
-function ControlMapa({ onTocarMapa }) {
+function ControlMapa({ onTocarMapa, onArrastrar }) {
   const map = useMap();
-  useMapEvents({ click: onTocarMapa });
+  useMapEvents({ click: onTocarMapa, dragstart: onArrastrar });
 
   useEffect(() => {
     // Leaflet necesita recalcular su tamaño si el contenedor cambia (rotar el cel, etc.).
@@ -349,7 +397,16 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
   const [aviso, setAviso] = useState(null); // {texto, tipo: 'info'|'ok'|'error'}
   const [alturaHoja, setAlturaHoja] = useState(0);
   const [alertaFuera, setAlertaFuera] = useState(false); // mapa en rojo 4 s
+  // Navegación ("Cómo llegar")
+  const [sinEscaleras, setSinEscaleras] = useState(false); // ruta accesible
+  const [seguir, setSeguir] = useState(false); // el mapa te sigue mientras caminas
+  const [verPasos, setVerPasos] = useState(false); // lista completa de indicaciones
+  const nodosRutaRef = useRef(null); // ruta anterior, para saber si se recalculó
   seleccionadoNumRef.current = seleccionadoNum;
+
+  // Red de pasillos (se arma una sola vez) y herramienta de trazado.
+  const red = useMemo(() => crearRed(PASILLOS), []);
+  const editor = useEditorPasillos(PASILLOS, MODO_TRAZAR);
 
   const demo = useMemo(leerModoDemo, []);
 
@@ -396,6 +453,7 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
   const elegirEdificio = useCallback((numero) => {
     clearTimeout(timerCambioRef.current);
     setRutaActiva(false);
+    setVerPasos(false);
     const actual = seleccionadoNumRef.current;
     if (actual != null && actual !== numero) {
       setSeleccionadoNum(null);
@@ -538,6 +596,7 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
 
   // --- 5.7 Botón dorado "Mi ubicación" ---
   const tocarMiUbicacion = () => {
+    if (rutaActiva) setSeguir(true); // en navegación: vuelve a seguirte
     if (posicion) {
       const mapa = mapaRef.current;
       mapa?.flyTo([posicion.lat, posicion.lng], Math.max(mapa.getZoom(), 18), { duration: 0.6 });
@@ -551,18 +610,65 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
     iniciarUbicacion();
   };
 
-  // --- 5.8 "Cómo llegar": línea desde tu ubicación hasta el edificio ---
+  // --- 5.8 "Cómo llegar" ---
   const tocarComoLlegar = () => {
     if (rutaActiva) {
-      setRutaActiva(false);
+      terminarRuta();
       return;
     }
+    nodosRutaRef.current = null;
+    setVerPasos(false);
+    setSeguir(false);
     setRutaActiva(true);
     if (!rastreando) iniciarUbicacion();
     else if (!posicion) mostrarAviso('Necesitas estar dentro del campus para trazar la ruta.', 'info');
   };
+  function terminarRuta() {
+    setRutaActiva(false);
+    setSeguir(false);
+    setVerPasos(false);
+  }
 
-  // Cuando hay ruta y ya tenemos tu posición, encuadrar ambos puntos UNA vez.
+  // Lugares para las indicaciones ("Gira a la derecha junto al Edificio 5").
+  const lugares = useMemo(
+    () => edificios.map((b) => ({ nombre: `Edificio ${b.number}`, punto: b.coords })),
+    [edificios],
+  );
+
+  // A qué nodo de los pasillos hay que llegar: la(s) puerta(s) marcada(s) en
+  // campusPaths.js; si no tiene, el punto de pasillo más cercano al edificio.
+  // (Con dos puertas, `nodo` es una lista y la ruta va a la más cercana.)
+  const destino = useMemo(() => {
+    if (!contenidoHoja) return null;
+    const puertas = [].concat(red.entradas[contenidoHoja.number] ?? []).filter((n) => red.nodos[n]);
+    const nodo = puertas.length ? puertas : nodoMasCercano(red, contenidoHoja.entrada);
+    return nodo == null ? null : { nodo, punto: red.nodos[[].concat(nodo)[0]] };
+  }, [red, contenidoHoja]);
+
+  // La ruta se recalcula cada vez que el GPS te mueve (es muy rápido).
+  const ruta = useMemo(() => {
+    if (!posicion || !contenidoHoja || !destino) return null;
+    const origen = [posicion.lat, posicion.lng];
+    const opciones = { lugares, nombreDestino: `Edificio ${contenidoHoja.number}` };
+    if (sinEscaleras) {
+      const accesible = calcularRuta(red, origen, destino.nodo, { ...opciones, accesible: true });
+      if (accesible) return accesible;
+      // No hay forma de llegar sin escaleras: se da la normal con aviso.
+      const normal = calcularRuta(red, origen, destino.nodo, opciones);
+      return normal && { ...normal, sinOpcionAccesible: true };
+    }
+    return calcularRuta(red, origen, destino.nodo, opciones);
+  }, [posicion, contenidoHoja, destino, red, lugares, sinEscaleras]);
+
+  // Distancia y minutos: por los pasillos si hay ruta; si no, en línea recta.
+  const distancia =
+    ruta?.metros ??
+    (posicion && contenidoHoja
+      ? distanciaMetros(posicion, { lat: contenidoHoja.entrada[0], lng: contenidoHoja.entrada[1] })
+      : null);
+  const minutos = distancia != null ? Math.max(1, Math.round(distancia / VELOCIDAD_CAMINANDO / 60)) : null;
+
+  // Al empezar: encuadrar toda la ruta UNA vez (vista general).
   useEffect(() => {
     if (!rutaActiva) {
       rutaAjustadaRef.current = false;
@@ -571,19 +677,62 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
     const mapa = mapaRef.current;
     if (!mapa || !posicion || !seleccionado || rutaAjustadaRef.current) return;
     rutaAjustadaRef.current = true;
-    mapa.fitBounds(L.latLngBounds([[posicion.lat, posicion.lng], seleccionado.entrada]), {
+    const puntos = ruta?.puntos ?? [[posicion.lat, posicion.lng], seleccionado.entrada];
+    mapa.fitBounds(L.latLngBounds(puntos), {
       paddingTopLeft: [48, 96],
       paddingBottomRight: [48, alturaHoja + 32],
       maxZoom: 19,
     });
-  }, [rutaActiva, posicion, seleccionado, alturaHoja]);
+  }, [rutaActiva, posicion, seleccionado, alturaHoja, ruta]);
 
-  // Distancia en línea recta y minutos estimados caminando.
-  const distancia =
-    posicion && contenidoHoja
-      ? distanciaMetros(posicion, { lat: contenidoHoja.entrada[0], lng: contenidoHoja.entrada[1] })
-      : null;
-  const minutos = distancia != null ? Math.max(1, Math.round(distancia / VELOCIDAD_CAMINANDO / 60)) : null;
+  // (Va ANTES del efecto de abajo para que se ejecute primero.)
+  // Cambiar a "sin escaleras" no es desviarse: no mostrar "Recalculando".
+  useEffect(() => {
+    nodosRutaRef.current = null;
+  }, [sinEscaleras]);
+
+  // Mientras caminas: seguirte, avisar si se recalculó y avisar al llegar.
+  useEffect(() => {
+    if (!rutaActiva || !posicion || !seleccionado) return;
+
+    // ¿Llegaste?
+    // La meta es el final de la ruta (la puerta elegida); sin ruta, la del edificio.
+    const meta = ruta?.puntos.at(-1) ?? destino?.punto ?? seleccionado.entrada;
+    if (metrosEntre([posicion.lat, posicion.lng], meta) < METROS_LLEGADA) {
+      mostrarAviso(`¡Llegaste al Edificio ${seleccionado.number}!`, 'ok', 6000);
+      terminarRuta();
+      return;
+    }
+
+    // ¿Te desviaste? Si la ruta nueva ya no es "lo que faltaba" de la anterior.
+    if (ruta) {
+      const antes = nodosRutaRef.current;
+      const ahora = ruta.nodos;
+      const esElMismoCamino = antes && antes.join(',').endsWith(ahora.join(','));
+      if (antes && !esElMismoCamino) mostrarAviso('Recalculando ruta…', 'info', 2000);
+      nodosRutaRef.current = ahora;
+    }
+
+    // Seguirte (dejando tu punto arriba de la hoja).
+    const mapa = mapaRef.current;
+    if (seguir && mapa) {
+      const zoom = Math.max(mapa.getZoom(), 19);
+      const altoHoja = hojaRef.current?.offsetHeight ?? 0;
+      const punto = mapa.project([posicion.lat, posicion.lng], zoom).add([0, altoHoja / 2]);
+      mapa.flyTo(mapa.unproject(punto, zoom), zoom, { duration: 0.5 });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [posicion, rutaActiva, ruta, seguir]);
+
+  // Tocar el mapa: en ?trazar pone puntos; en DEMO con ruta, "caminas" hasta
+  // donde tocaste (para la exposición); si no, cierra la hoja.
+  const tocarMapa = (e) => {
+    if (MODO_TRAZAR) return editor.tocarMapa(e.latlng);
+    if (demo && rutaActiva) return recibirPosicion(e.latlng.lat, e.latlng.lng, 8);
+    cerrarHoja();
+  };
+
+  const siguientePaso = ruta?.pasos?.[0];
 
   // ---------------------------------------------------------------------
   // PASO 6. Interfaz
@@ -601,6 +750,7 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
         '--pm-oro': colors.gold,
         '--pm-pin': `${TAMANO_PIN}px`,
         '--pm-sombra': colors.blueDeep,
+        '--pm-carmesi-osc': colors.crimsonDark,
       }}
     >
       <style>{ESTILOS}</style>
@@ -633,7 +783,7 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
           maxZoom={CAMPUS.zoomMax}
         />
 
-        <ControlMapa onTocarMapa={cerrarHoja} />
+        <ControlMapa onTocarMapa={tocarMapa} onArrastrar={() => setSeguir(false)} />
         <UbicacionUsuario posicion={posicion} />
 
         {/* Edificios en 3D. Se dibujan de arriba (norte) hacia abajo para que
@@ -643,7 +793,8 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
           .map((b) => {
             const activo = b.number === seleccionadoNum;
             const clase = `pm-3d--${b.number}${activo ? ' is-active' : ''}`;
-            const alTocar = { click: () => elegirEdificio(b.number) };
+            // En ?trazar los edificios no se pueden tocar (así no estorban al trazar).
+            const alTocar = MODO_TRAZAR ? {} : { click: () => elegirEdificio(b.number) };
             return (
               // La key cambia con `activo` para que Leaflet aplique la clase nueva.
               <Fragment key={`${b.number}-${activo}`}>
@@ -657,6 +808,7 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
                     // la clase al crear la figura; si llega después, se queda azul por defecto.
                     className={`pm-3d-pared ${clase}`}
                     bubblingMouseEvents={false}
+                    interactive={!MODO_TRAZAR}
                     eventHandlers={alTocar}
                   />
                 ))}
@@ -666,6 +818,7 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
                     positions={caja.techo}
                     className={`pm-3d-techo ${clase}`}
                     bubblingMouseEvents={false}
+                    interactive={!MODO_TRAZAR}
                     eventHandlers={alTocar}
                   />
                 ))}
@@ -673,25 +826,44 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
             );
           })}
 
-        {/* Un marcador 3D por edificio, parado sobre el techo */}
-        {edificios.map((b) => (
-          <Marker
-            key={b.number}
-            position={b.geo.cima}
-            icon={iconoEdificio(b.number, b.number === seleccionadoNum)}
-            zIndexOffset={b.number === seleccionadoNum ? 500 : 0}
-            title={b.name || `Edificio ${b.number}`}
-            eventHandlers={{ click: () => elegirEdificio(b.number) }}
-          />
-        ))}
+        {/* Una gota estilo Google Maps por edificio, parada sobre el techo */}
+        {!MODO_TRAZAR &&
+          edificios.map((b) => (
+            <Marker
+              // La key cambia con `activo` para que se repita el brinco.
+              key={`${b.number}-${b.number === seleccionadoNum}`}
+              position={b.geo.cima}
+              icon={iconoEdificio(b, b.number === seleccionadoNum)}
+              zIndexOffset={b.number === seleccionadoNum ? 500 : 0}
+              title={b.name || `Edificio ${b.number}`}
+              eventHandlers={{ click: () => elegirEdificio(b.number) }}
+            />
+          ))}
 
-        {/* Línea de "Cómo llegar" (línea recta, no sigue pasillos) */}
+        {/* Ruta de "Cómo llegar": borde blanco + línea azul encima (como Google Maps).
+            El primer pedacito (de ti al pasillo) va punteado. */}
         {rutaActiva && posicion && seleccionado && (
-          <Polyline
-            positions={[[posicion.lat, posicion.lng], seleccionado.entrada]}
-            pathOptions={{ color: colors.crimson, weight: 5, dashArray: '2 10', lineCap: 'round' }}
-          />
+          <>
+            {ruta ? (
+              <>
+                <Polyline positions={ruta.puntos.slice(1)} pathOptions={{ className: 'pm-ruta-borde', weight: 11 }} interactive={false} />
+                <Polyline positions={ruta.puntos.slice(1)} pathOptions={{ className: 'pm-ruta', weight: 6 }} interactive={false} />
+                <Polyline positions={ruta.puntos.slice(0, 2)} pathOptions={{ className: 'pm-ruta-acceso', weight: 4, dashArray: '1 9' }} interactive={false} />
+              </>
+            ) : (
+              // Sin pasillos trazados hasta ahí: línea recta de respaldo.
+              <Polyline
+                positions={[[posicion.lat, posicion.lng], seleccionado.entrada]}
+                pathOptions={{ className: 'pm-ruta-acceso', weight: 5, dashArray: '2 10' }}
+                interactive={false}
+              />
+            )}
+            <Marker position={ruta?.puntos.at(-1) ?? destino?.punto ?? seleccionado.entrada} icon={ICONO_META} interactive={false} />
+          </>
         )}
+
+        {/* Herramienta de trazado (?trazar) */}
+        {MODO_TRAZAR && <EditorCapas editor={editor} />}
       </MapContainer>
 
       {/* Fuera del Poli: mapa en rojo + aviso al centro durante 4 s */}
@@ -705,9 +877,15 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
         </div>
       )}
 
+      {MODO_TRAZAR && <EditorPanel editor={editor} posicion={posicion} />}
+
       {/* Aviso flotante arriba */}
       {aviso && (
-        <div className="pointer-events-none absolute inset-x-0 top-3 z-[1100] flex justify-center px-4">
+        <div
+          className="pointer-events-none absolute inset-x-0 top-3 z-[1100] flex justify-center px-4"
+          // En ?trazar el panel ocupa la parte de arriba: el aviso baja.
+          style={MODO_TRAZAR ? { top: 'auto', bottom: 96 } : undefined}
+        >
           <div role="status" className={`pm-aviso pm-aviso--${aviso.tipo}`}>
             {demo && <span className="pm-demo">DEMO</span>}
             {aviso.texto}
@@ -765,16 +943,94 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
 
             {contenidoHoja.description && <p className="pm-hoja__texto">{contenidoHoja.description}</p>}
 
-            {distancia != null && (
+            {/* Sin navegación: distancia y tiempo (por los pasillos si se puede) */}
+            {!rutaActiva && distancia != null && (
               <p className="pm-hoja__meta">
-                A {textoDistancia(distancia)} en línea recta · ~{minutos} min caminando
+                A {textoDistancia(distancia)} {ruta ? 'caminando' : 'en línea recta'} · ~{minutos} min
               </p>
+            )}
+
+            {/* Navegación: siguiente indicación, opciones y lista de pasos */}
+            {rutaActiva && (
+              <div className="pm-nav">
+                {!posicion ? (
+                  <p className="pm-nav__buscando">
+                    <Icon name="location_searching" size={20} /> Buscando tu ubicación…
+                  </p>
+                ) : ruta ? (
+                  <>
+                    <div className="pm-nav__paso">
+                      <span className="pm-nav__icono">
+                        <Icon name={siguientePaso.icono} size={30} />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <strong>{siguientePaso.texto}</strong>
+                        {siguientePaso.metros > 0 && <span>{textoDistancia(siguientePaso.metros)}</span>}
+                      </div>
+                    </div>
+                    <p className="pm-hoja__meta">
+                      {textoDistancia(ruta.metros)} · ~{minutos} min caminando
+                    </p>
+                  </>
+                ) : (
+                  <p className="pm-nav__aviso">
+                    <Icon name="info" size={18} /> Aún no hay pasillos trazados hasta aquí; te muestro la línea recta.
+                  </p>
+                )}
+
+                {ruta?.sinOpcionAccesible && (
+                  <p className="pm-nav__aviso">
+                    <Icon name="warning" size={18} /> No hay ruta sin escaleras hasta este edificio.
+                  </p>
+                )}
+                {ruta?.conEscaleras && !sinEscaleras && (
+                  <p className="pm-nav__aviso">
+                    <Icon name="stairs" size={18} /> Esta ruta tiene escaleras.
+                  </p>
+                )}
+                {red.provisional && (
+                  <p className="pm-nav__aviso">
+                    <Icon name="construction" size={18} /> Pasillos de prueba: la ruta puede no ser exacta.
+                  </p>
+                )}
+                {demo && <p className="pm-nav__aviso">DEMO: toca el mapa para "caminar" hasta ese punto.</p>}
+
+                <div className="pm-nav__opciones">
+                  <button
+                    type="button"
+                    className={`pm-chip ${sinEscaleras ? 'is-on' : ''}`}
+                    aria-pressed={sinEscaleras}
+                    onClick={() => setSinEscaleras((v) => !v)}
+                  >
+                    <Icon name="accessible_forward" size={18} />
+                    Sin escaleras
+                  </button>
+                  {ruta && (
+                    <button type="button" className="pm-chip" aria-expanded={verPasos} onClick={() => setVerPasos((v) => !v)}>
+                      <Icon name={verPasos ? 'expand_less' : 'format_list_numbered'} size={18} />
+                      {verPasos ? 'Ocultar pasos' : `Ver pasos (${ruta.pasos.length})`}
+                    </button>
+                  )}
+                </div>
+
+                {verPasos && ruta && (
+                  <ol className="pm-nav__lista">
+                    {ruta.pasos.map((paso, i) => (
+                      <li key={i}>
+                        <Icon name={paso.icono} size={20} />
+                        <span>{paso.texto}</span>
+                        {paso.metros > 0 && <small>{textoDistancia(paso.metros)}</small>}
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </div>
             )}
 
             <div className="flex gap-2">
               <button type="button" onClick={tocarComoLlegar} className="pm-btn pm-btn--principal">
                 <Icon name={rutaActiva ? 'close' : 'directions_walk'} />
-                {rutaActiva ? 'Quitar ruta' : 'Cómo llegar'}
+                {rutaActiva ? 'Terminar' : 'Cómo llegar'}
               </button>
               {onOpenBuilding && (
                 <button
@@ -867,6 +1123,101 @@ const ESTILOS = `
   to   { transform: scale(4.5); opacity: 0; }
 }
 
+/* Gota estilo Google Maps (mapa de alumnos) */
+.pm-gota { position: relative; width: 100%; height: 100%; }
+.pm-gota__forma {
+  position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible;
+  transform-origin: 50% 100%; filter: drop-shadow(0 2px 2px rgb(0 0 0 / .3));
+  transition: transform .2s ease;
+}
+.pm-gota__forma path { fill: var(--pm-carmesi); stroke: var(--pm-carmesi-osc); stroke-width: 1.2; }
+.pm-gota__forma circle { fill: var(--pm-carmesi-osc); }
+.pm-gota__sombra {
+  position: absolute; left: 50%; bottom: -3px; width: 60%; height: 5px; transform: translateX(-50%);
+  border-radius: 50%; background: rgb(0 0 0 / .3); filter: blur(1.5px);
+}
+.pm-gota__onda {
+  position: absolute; left: 50%; bottom: 0; width: 18px; height: 18px; margin: 0 0 -9px -9px;
+  border-radius: 50%; border: 3px solid var(--pm-oro); opacity: 0; pointer-events: none;
+}
+/* Nombre a un lado, con contorno blanco para que se lea sobre el mapa */
+.pm-gota__nombre {
+  position: absolute; left: calc(100% + 3px); top: 4px; white-space: nowrap;
+  font-size: 12px; font-weight: 700; line-height: 1.2; color: var(--pm-carmesi-osc);
+  text-shadow: 0 0 2px white, 0 0 2px white, 0 0 3px white, 0 0 3px white;
+  pointer-events: none; transition: font-size .2s ease;
+}
+.pm-gota.is-active .pm-gota__forma { animation: pm-gota-brinco .7s cubic-bezier(.3,.7,.4,1) both; }
+.pm-gota.is-active .pm-gota__sombra { animation: pm-sombra-brinco .7s cubic-bezier(.3,.7,.4,1) both; }
+.pm-gota.is-active .pm-gota__onda { animation: pm-onda 1s ease-out .15s 2; }
+.pm-gota.is-active .pm-gota__nombre { font-size: 14px; left: calc(100% + 10px); }
+@keyframes pm-gota-brinco {
+  0%   { transform: translateY(0) scale(1); }
+  30%  { transform: translateY(-16px) scale(1.3, 1.4); }
+  55%  { transform: translateY(0) scale(1.5, 1.3); }
+  75%  { transform: translateY(-4px) scale(1.4); }
+  100% { transform: translateY(0) scale(1.4); }
+}
+
+/* Ruta de "Cómo llegar" */
+.pm-ruta-borde { stroke: white; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+.pm-ruta { stroke: var(--pm-azul); stroke-linecap: round; stroke-linejoin: round; fill: none; }
+.pm-ruta-acceso { stroke: var(--pm-azul); stroke-linecap: round; fill: none; }
+.pm-meta {
+  width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--pm-azul); color: white; border: 2px solid white; box-shadow: 0 2px 5px rgb(0 0 0 / .35);
+}
+.pm-meta .material-symbols-rounded { font-size: 16px; }
+
+/* Panel de navegación dentro de la hoja */
+.pm-nav { display: flex; flex-direction: column; gap: .5rem; }
+.pm-nav__paso {
+  display: flex; align-items: center; gap: .75rem; padding: .75rem; border-radius: 16px;
+  background: var(--pm-azul); color: white;
+}
+.pm-nav__paso strong { display: block; font-size: 1.02rem; line-height: 1.25; }
+.pm-nav__paso span { font-size: .85rem; opacity: .85; }
+.pm-nav__icono { flex: none; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: color-mix(in srgb, white 14%, transparent); }
+.pm-nav__buscando, .pm-nav__aviso { display: flex; align-items: center; gap: .4rem; font-size: .85rem; color: var(--pm-azul); }
+.pm-nav__aviso { opacity: .85; }
+.pm-nav__opciones { display: flex; flex-wrap: wrap; gap: .5rem; }
+.pm-chip {
+  display: inline-flex; align-items: center; gap: .3rem; min-height: 36px; padding: 0 .8rem; border-radius: 999px;
+  font-size: .85rem; font-weight: 600; color: var(--pm-azul);
+  background: color-mix(in srgb, var(--pm-azul) 8%, white); border: 1.5px solid transparent;
+}
+.pm-chip.is-on { background: color-mix(in srgb, var(--pm-oro) 25%, white); border-color: var(--pm-oro); }
+.pm-nav__lista { display: flex; flex-direction: column; gap: .1rem; margin: 0; padding: 0; list-style: none; }
+.pm-nav__lista li {
+  display: flex; align-items: center; gap: .6rem; padding: .5rem .25rem; font-size: .9rem; color: var(--pm-azul);
+  border-bottom: 1px solid color-mix(in srgb, var(--pm-azul) 10%, white);
+}
+.pm-nav__lista li span { flex: 1; }
+.pm-nav__lista li small { opacity: .7; white-space: nowrap; }
+
+/* Herramienta ?trazar */
+.pm-traza {
+  position: absolute; top: 10px; left: 10px; right: 10px; z-index: 1150; display: flex; flex-direction: column; gap: .45rem;
+  padding: .7rem; border-radius: 16px; background: white; color: var(--pm-azul); box-shadow: 0 6px 20px rgb(0 0 0 / .25);
+  max-height: 60%; overflow-y: auto;
+}
+.pm-traza__titulo { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; font-size: .95rem; }
+.pm-traza__titulo span { font-size: .78rem; opacity: .75; }
+.pm-traza__fila { display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; }
+.pm-traza__chip {
+  display: inline-flex; align-items: center; gap: .25rem; min-height: 34px; padding: 0 .65rem; border-radius: 999px;
+  font-size: .82rem; font-weight: 600; background: color-mix(in srgb, var(--pm-azul) 8%, white); color: var(--pm-azul);
+}
+.pm-traza__chip:disabled { opacity: .4; }
+.pm-traza__chip.is-on { background: var(--pm-azul); color: white; }
+.pm-traza__chip--principal { background: var(--pm-carmesi); color: white; }
+.pm-traza__edificio { font-size: .85rem; font-weight: 600; }
+.pm-traza__edificio select { border: 1px solid color-mix(in srgb, var(--pm-azul) 30%, white); border-radius: 8px; padding: .2rem .4rem; }
+.pm-traza__ayuda { font-size: .8rem; line-height: 1.35; margin: 0; }
+.pm-traza__copiar { display: flex; flex-direction: column; gap: .35rem; font-size: .8rem; }
+.pm-traza__copiar textarea { width: 100%; height: 140px; font-family: monospace; font-size: 11px; border: 1px solid color-mix(in srgb, var(--pm-azul) 30%, white); border-radius: 8px; }
+.pm-traza-etiqueta { font-weight: 700; font-size: 11px; }
+
 /* Fuera del Poli: capa roja sobre el mapa + tarjeta al centro (dura 4 s) */
 .pm-fuera {
   position: absolute; inset: 0; z-index: 1200; display: grid; place-items: center; padding: 24px;
@@ -952,6 +1303,8 @@ const ESTILOS = `
   .pm-pin.is-active .pm-pin__cuerpo { animation: none; transform: scale(1.25); }
   .pm-pin.is-active .pm-pin__onda, .pm-pin.is-active .pm-pin__sombra { animation: none; }
   .pm-fuera__tarjeta { animation: none; }
+  .pm-gota.is-active .pm-gota__forma { animation: none; transform: scale(1.4); }
+  .pm-gota.is-active .pm-gota__onda, .pm-gota.is-active .pm-gota__sombra { animation: none; }
 }
 `;
 
