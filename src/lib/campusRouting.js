@@ -245,7 +245,16 @@ function armarPasos(red, pegado, camino, lugares, nombreDestino) {
 
   // El primer paso: si estás lejos del pasillo, primero hay que llegar a él.
   if (pegado.metros > 8) pasos.unshift({ icono: 'near_me', texto: 'Ve hacia el pasillo más cercano', metros: pegado.metros });
-  pasos.push({ icono: 'flag', texto: `Llegas a la entrada de ${nombreDestino}`, metros: 0 });
+  // Si lo último es un giro cortito hacia la puerta (menos de 10 m), mejor se dice
+  // "La entrada queda a tu izquierda" en vez de dar otra indicación.
+  const ultimo = pasos[pasos.length - 1];
+  if (pasos.length > 1 && ultimo.metros < 10 && /^turn_(slight_)?(left|right)$/.test(ultimo.icono)) {
+    pasos.pop();
+    const lado = ultimo.icono.endsWith('right') ? 'derecha' : 'izquierda';
+    pasos.push({ icono: 'flag', texto: `La entrada del ${nombreDestino} queda a tu ${lado}`, metros: 0 });
+  } else {
+    pasos.push({ icono: 'flag', texto: `Llegas a la entrada del ${nombreDestino}`, metros: 0 });
+  }
 
   // Solo lo que necesita la pantalla (se quita la marca interna de escaleras).
   return pasos.map(({ icono, texto, metros }) => ({ icono, texto, metros }));

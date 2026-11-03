@@ -128,6 +128,7 @@ const TAMANO_GOTA = 26;
 
 // "Cómo llegar":
 const METROS_LLEGADA = 15; // a esta distancia de la entrada se considera que llegaste
+const ALTO_BARRA_NAV = 84; // alto aproximado de la barra de arriba durante la navegación
 const MODO_TRAZAR = new URLSearchParams(window.location.search).has('trazar');
 
 // Velocidad promedio caminando (metros por segundo) para estimar minutos.
@@ -165,6 +166,49 @@ function leerModoDemo() {
     if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
   }
   return { lat: CAMPUS.centro[0], lng: CAMPUS.centro[1] };
+}
+
+// Arrastrar con el dedo (o con el mouse) una hoja hacia arriba o hacia abajo.
+// Regresa las props para la zona que se agarra y cuánto se ha movido (dy).
+//   onArriba → se soltó después de jalar hacia arriba
+//   onAbajo  → se soltó después de jalar hacia abajo
+//   onToque  → fue solo un toque (sin arrastrar)
+// Un jalón rápido cuenta aunque sea corto, como en Google Maps.
+function useArrastre({ onArriba, onAbajo, onToque, umbral = 60 }) {
+  const inicioRef = useRef(null);
+  const [dy, setDy] = useState(0);
+
+  const soltar = (e) => {
+    const inicio = inicioRef.current;
+    if (!inicio) return;
+    inicioRef.current = null;
+    setDy(0);
+    const movido = e.clientY - inicio.y;
+    const rapido = performance.now() - inicio.t < 250 && Math.abs(movido) > 25;
+    if (movido > umbral || (rapido && movido > 0)) onAbajo?.();
+    else if (movido < -umbral || (rapido && movido < 0)) onArriba?.();
+    else if (Math.abs(movido) < 6) onToque?.();
+  };
+
+  return {
+    dy,
+    props: {
+      onPointerDown: (e) => {
+        // Los botones (como la X) funcionan normal; no empiezan un arrastre.
+        if (e.button > 0 || e.target.closest('button')) return;
+        inicioRef.current = { y: e.clientY, t: performance.now() };
+        e.currentTarget.setPointerCapture?.(e.pointerId);
+      },
+      onPointerMove: (e) => {
+        if (inicioRef.current) setDy(e.clientY - inicioRef.current.y);
+      },
+      onPointerUp: soltar,
+      onPointerCancel: () => {
+        inicioRef.current = null;
+        setDy(0);
+      },
+    },
+  };
 }
 
 // Mueve un punto [lat, lng] cierta cantidad de metros al este y al norte.
@@ -486,7 +530,20 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
     observador.observe(hoja);
     return () => observador.disconnect();
   }, []);
-  const alturaVisible = seleccionado ? alturaHoja : 0;
+
+  // La tira de navegación (abajo, durante "Cómo llegar") también se mide.
+  const bandejaRef = useRef(null);
+  const [alturaBandeja, setAlturaBandeja] = useState(0);
+  useEffect(() => {
+    const bandeja = bandejaRef.current;
+    if (!rutaActiva || !bandeja) return undefined;
+    const observador = new ResizeObserver(() => setAlturaBandeja(bandeja.offsetHeight));
+    observador.observe(bandeja);
+    return () => observador.disconnect();
+  }, [rutaActiva]);
+
+  // Cuánto ocupa lo de abajo (para subir el botón dorado y centrar el mapa).
+  const alturaVisible = rutaActiva ? alturaBandeja : seleccionado ? alturaHoja : 0;
 
   // --- 5.4 Centrar suavemente en el edificio elegido ---
   // Lo deja un poco ARRIBA del centro para que la hoja no lo tape.
@@ -679,11 +736,11 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
     rutaAjustadaRef.current = true;
     const puntos = ruta?.puntos ?? [[posicion.lat, posicion.lng], seleccionado.entrada];
     mapa.fitBounds(L.latLngBounds(puntos), {
-      paddingTopLeft: [48, 96],
-      paddingBottomRight: [48, alturaHoja + 32],
+      paddingTopLeft: [40, ALTO_BARRA_NAV + 40], // que no la tape la barra de arriba
+      paddingBottomRight: [40, alturaBandeja + 40], // ni la tira de abajo
       maxZoom: 19,
     });
-  }, [rutaActiva, posicion, seleccionado, alturaHoja, ruta]);
+  }, [rutaActiva, posicion, seleccionado, alturaBandeja, ruta]);
 
   // (Va ANTES del efecto de abajo para que se ejecute primero.)
   // Cambiar a "sin escaleras" no es desviarse: no mostrar "Recalculando".
@@ -713,12 +770,12 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
       nodosRutaRef.current = ahora;
     }
 
-    // Seguirte (dejando tu punto arriba de la hoja).
+    // Seguirte (dejando tu punto en medio de la barra de arriba y la tira de abajo).
     const mapa = mapaRef.current;
     if (seguir && mapa) {
       const zoom = Math.max(mapa.getZoom(), 19);
-      const altoHoja = hojaRef.current?.offsetHeight ?? 0;
-      const punto = mapa.project([posicion.lat, posicion.lng], zoom).add([0, altoHoja / 2]);
+      const altoAbajo = bandejaRef.current?.offsetHeight ?? 0;
+      const punto = mapa.project([posicion.lat, posicion.lng], zoom).add([0, (altoAbajo - ALTO_BARRA_NAV) / 2]);
       mapa.flyTo(mapa.unproject(punto, zoom), zoom, { duration: 0.5 });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -729,10 +786,27 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
   const tocarMapa = (e) => {
     if (MODO_TRAZAR) return editor.tocarMapa(e.latlng);
     if (demo && rutaActiva) return recibirPosicion(e.latlng.lat, e.latlng.lng, 8);
+    if (rutaActiva) return; // navegando: tocar el mapa no quita la ruta (se cancela con la X)
     cerrarHoja();
   };
 
   const siguientePaso = ruta?.pasos?.[0];
+
+  // Arrastrar la hoja del edificio: abajo = cerrar, arriba = abrir la ficha completa.
+  const arrastreHoja = useArrastre({
+    onAbajo: cerrarHoja,
+    onArriba: () => contenidoHoja && onOpenBuilding?.(contenidoHoja.number),
+  });
+  // Arrastrar la tira de navegación: arriba = ver pasos, abajo = esconderlos, toque = alternar.
+  const arrastreBandeja = useArrastre({
+    onArriba: () => setVerPasos(true),
+    onAbajo: () => setVerPasos(false),
+    onToque: () => setVerPasos((v) => !v),
+    umbral: 40,
+  });
+  // Mientras arrastras la hoja, la hoja sigue al dedo (hacia arriba con "resistencia").
+  const desplazamientoHoja = arrastreHoja.dy > 0 ? arrastreHoja.dy : arrastreHoja.dy * 0.35;
+  const hojaVisible = !!seleccionado && !rutaActiva;
 
   // ---------------------------------------------------------------------
   // PASO 6. Interfaz
@@ -884,7 +958,9 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
         <div
           className="pointer-events-none absolute inset-x-0 top-3 z-[1100] flex justify-center px-4"
           // En ?trazar el panel ocupa la parte de arriba: el aviso baja.
-          style={MODO_TRAZAR ? { top: 'auto', bottom: 96 } : undefined}
+          style={
+            MODO_TRAZAR ? { top: 'auto', bottom: 96 } : rutaActiva ? { top: ALTO_BARRA_NAV + 16 } : undefined
+          }
         >
           <div role="status" className={`pm-aviso pm-aviso--${aviso.tipo}`}>
             {demo && <span className="pm-demo">DEMO</span>}
@@ -905,17 +981,30 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
       </button>
 
       {/* Hoja inferior estilo Google Maps */}
+      {/* Durante "Cómo llegar" se esconde para dejar ver la ruta. */}
       <section
         ref={hojaRef}
         className="pm-hoja"
-        data-abierta={seleccionado ? 'true' : 'false'}
-        aria-hidden={!seleccionado}
+        data-abierta={hojaVisible ? 'true' : 'false'}
+        aria-hidden={!hojaVisible}
         aria-label={contenidoHoja ? `Información del edificio ${contenidoHoja.number}` : undefined}
+        style={
+          arrastreHoja.dy ? { transform: `translateY(${desplazamientoHoja}px)`, transition: 'none' } : undefined
+        }
       >
-        <div className="pm-hoja__asa" aria-hidden="true" />
+        {/* Zona para agarrar: la rayita y el encabezado.
+            Jala hacia abajo para cerrar, hacia arriba para ver la ficha. */}
+        <div className="pm-arrastre" {...arrastreHoja.props}>
+          <div className="pm-hoja__asa" aria-hidden="true" />
+          {onOpenBuilding && (
+            <p className="pm-hoja__pista">
+              {arrastreHoja.dy < -60 ? 'Suelta para ver la ficha' : 'Desliza hacia arriba para ver la ficha'}
+            </p>
+          )}
+        </div>
         {contenidoHoja && (
           <div className="flex flex-col gap-3 px-5 pb-5">
-            <header className="flex items-start gap-3">
+            <header className="pm-arrastre flex items-start gap-3" {...arrastreHoja.props}>
               {contenidoHoja.photo ? (
                 <img
                   src={`${import.meta.env.BASE_URL}${contenidoHoja.photo}`}
@@ -950,42 +1039,97 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
               </p>
             )}
 
-            {/* Navegación: siguiente indicación, opciones y lista de pasos */}
-            {rutaActiva && (
-              <div className="pm-nav">
-                {!posicion ? (
-                  <p className="pm-nav__buscando">
-                    <Icon name="location_searching" size={20} /> Buscando tu ubicación…
-                  </p>
-                ) : ruta ? (
-                  <>
-                    <div className="pm-nav__paso">
-                      <span className="pm-nav__icono">
-                        <Icon name={siguientePaso.icono} size={30} />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <strong>{siguientePaso.texto}</strong>
-                        {siguientePaso.metros > 0 && <span>{textoDistancia(siguientePaso.metros)}</span>}
-                      </div>
-                    </div>
-                    <p className="pm-hoja__meta">
-                      {textoDistancia(ruta.metros)} · ~{minutos} min caminando
-                    </p>
-                  </>
-                ) : (
-                  <p className="pm-nav__aviso">
-                    <Icon name="info" size={18} /> Aún no hay pasillos trazados hasta aquí; te muestro la línea recta.
-                  </p>
-                )}
+            <div className="flex gap-2">
+              <button type="button" onClick={tocarComoLlegar} className="pm-btn pm-btn--principal" tabIndex={hojaVisible ? 0 : -1}>
+                <Icon name="directions_walk" />
+                Cómo llegar
+              </button>
+              {onOpenBuilding && (
+                <button
+                  type="button"
+                  onClick={() => onOpenBuilding(contenidoHoja.number)}
+                  className="pm-btn pm-btn--secundario"
+                >
+                  <Icon name="info" />
+                  Ver ficha
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </section>
 
+      {/* ---------- Navegación ("Cómo llegar") ----------
+          Arriba: la siguiente indicación y la X para cancelar.
+          Abajo: una tira delgada con metros y minutos; al jalarla hacia arriba
+          se ven los avisos, "Sin escaleras" y todos los pasos. */}
+      {rutaActiva && contenidoHoja && (
+        <>
+          <div className="pm-navbar" role="status" aria-live="polite">
+            <span className="pm-nav__icono">
+              <Icon
+                name={!posicion ? 'location_searching' : siguientePaso?.icono ?? 'straight'}
+                size={30}
+              />
+            </span>
+            <div className="min-w-0 flex-1">
+              {!posicion ? (
+                <strong>Buscando tu ubicación…</strong>
+              ) : ruta ? (
+                <>
+                  <strong>{siguientePaso.texto}</strong>
+                  {siguientePaso.metros > 0 && <span>{textoDistancia(siguientePaso.metros)}</span>}
+                </>
+              ) : (
+                <>
+                  <strong>Sigue la línea hacia el Edificio {contenidoHoja.number}</strong>
+                  <span>Aún no hay pasillos trazados hasta aquí</span>
+                </>
+              )}
+            </div>
+            <button type="button" className="pm-navbar__cerrar" onClick={terminarRuta} aria-label="Cancelar ruta">
+              <Icon name="close" />
+            </button>
+          </div>
+
+          <section
+            ref={bandejaRef}
+            className="pm-bandeja"
+            aria-label="Detalles de la ruta"
+            style={
+              arrastreBandeja.dy
+                ? { transform: `translateY(${Math.max(arrastreBandeja.dy, -40)}px)`, transition: 'none' }
+                : undefined
+            }
+          >
+            <div
+              className="pm-arrastre pm-bandeja__resumen"
+              {...arrastreBandeja.props}
+              role="button"
+              tabIndex={0}
+              aria-expanded={verPasos}
+              onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setVerPasos((v) => !v)}
+            >
+              <div className="pm-hoja__asa" aria-hidden="true" />
+              <div className="flex items-center gap-2 px-5 pb-3">
+                <div className="min-w-0 flex-1">
+                  <strong>
+                    {distancia != null ? `${textoDistancia(distancia)} · ${minutos} min` : 'Calculando…'}
+                  </strong>
+                  <span>
+                    Edificio {contenidoHoja.number}
+                    {ruta?.conEscaleras ? ' · con escaleras' : ''}
+                  </span>
+                </div>
+                <Icon name={verPasos ? 'expand_more' : 'expand_less'} />
+              </div>
+            </div>
+
+            {verPasos && (
+              <div className="pm-bandeja__detalle">
                 {ruta?.sinOpcionAccesible && (
                   <p className="pm-nav__aviso">
                     <Icon name="warning" size={18} /> No hay ruta sin escaleras hasta este edificio.
-                  </p>
-                )}
-                {ruta?.conEscaleras && !sinEscaleras && (
-                  <p className="pm-nav__aviso">
-                    <Icon name="stairs" size={18} /> Esta ruta tiene escaleras.
                   </p>
                 )}
                 {red.provisional && (
@@ -1005,15 +1149,9 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
                     <Icon name="accessible_forward" size={18} />
                     Sin escaleras
                   </button>
-                  {ruta && (
-                    <button type="button" className="pm-chip" aria-expanded={verPasos} onClick={() => setVerPasos((v) => !v)}>
-                      <Icon name={verPasos ? 'expand_less' : 'format_list_numbered'} size={18} />
-                      {verPasos ? 'Ocultar pasos' : `Ver pasos (${ruta.pasos.length})`}
-                    </button>
-                  )}
                 </div>
 
-                {verPasos && ruta && (
+                {ruta && (
                   <ol className="pm-nav__lista">
                     {ruta.pasos.map((paso, i) => (
                       <li key={i}>
@@ -1024,28 +1162,16 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
                     ))}
                   </ol>
                 )}
+
+                <button type="button" onClick={terminarRuta} className="pm-btn pm-btn--secundario">
+                  <Icon name="close" />
+                  Terminar ruta
+                </button>
               </div>
             )}
-
-            <div className="flex gap-2">
-              <button type="button" onClick={tocarComoLlegar} className="pm-btn pm-btn--principal">
-                <Icon name={rutaActiva ? 'close' : 'directions_walk'} />
-                {rutaActiva ? 'Terminar' : 'Cómo llegar'}
-              </button>
-              {onOpenBuilding && (
-                <button
-                  type="button"
-                  onClick={() => onOpenBuilding(contenidoHoja.number)}
-                  className="pm-btn pm-btn--secundario"
-                >
-                  <Icon name="info" />
-                  Ver ficha
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-      </section>
+          </section>
+        </>
+      )}
     </div>
   );
 }
@@ -1169,7 +1295,41 @@ const ESTILOS = `
 }
 .pm-meta .material-symbols-rounded { font-size: 16px; }
 
-/* Panel de navegación dentro de la hoja */
+/* Zonas para arrastrar (la hoja del edificio y la tira de navegación) */
+.pm-arrastre { touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+.pm-arrastre:active { cursor: grabbing; }
+.pm-hoja__pista { margin: -6px 0 6px; text-align: center; font-size: .72rem; color: var(--pm-azul); opacity: .6; }
+
+/* Navegación: barra de arriba */
+.pm-navbar {
+  position: absolute; top: 10px; left: 10px; right: 10px; z-index: 1100;
+  display: flex; align-items: center; gap: .75rem; padding: .7rem .7rem .7rem .8rem; border-radius: 18px;
+  background: var(--pm-azul); color: white; box-shadow: 0 6px 18px rgb(0 0 0 / .3);
+  animation: pm-baja .3s cubic-bezier(.2,.8,.2,1) both;
+}
+.pm-navbar strong { display: block; font-size: 1.02rem; line-height: 1.25; }
+.pm-navbar span { font-size: .85rem; opacity: .85; }
+.pm-navbar__cerrar {
+  flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center;
+  background: color-mix(in srgb, white 16%, transparent); color: white;
+}
+@keyframes pm-baja { from { transform: translateY(-120%); } to { transform: none; } }
+
+/* Navegación: tira de abajo (se jala para ver los pasos) */
+.pm-bandeja {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 1100;
+  max-height: 55%; overflow-y: auto; overscroll-behavior: contain;
+  background: white; border-radius: 20px 20px 0 0; box-shadow: 0 -6px 24px rgb(0 0 0 / .18);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  animation: pm-sube .3s cubic-bezier(.2,.8,.2,1) both; transition: transform .2s ease;
+}
+.pm-bandeja__resumen { color: var(--pm-azul); }
+.pm-bandeja__resumen strong { display: block; font-size: 1.05rem; }
+.pm-bandeja__resumen span { font-size: .82rem; opacity: .75; }
+.pm-bandeja__detalle { display: flex; flex-direction: column; gap: .6rem; padding: 0 1.25rem 1.1rem; }
+@keyframes pm-sube { from { transform: translateY(100%); } to { transform: none; } }
+
+/* Panel de navegación (avisos, opciones y lista de pasos) */
 .pm-nav { display: flex; flex-direction: column; gap: .5rem; }
 .pm-nav__paso {
   display: flex; align-items: center; gap: .75rem; padding: .75rem; border-radius: 16px;
@@ -1299,7 +1459,8 @@ const ESTILOS = `
 /* Accesibilidad: sin animaciones si el usuario lo pidió en su sistema */
 @media (prefers-reduced-motion: reduce) {
   .pm-user__pulso { animation: none; }
-  .pm-hoja, .pm-fab, .pm-pin__cuerpo { transition: none; }
+  .pm-hoja, .pm-fab, .pm-pin__cuerpo, .pm-bandeja { transition: none; }
+  .pm-navbar, .pm-bandeja { animation: none; }
   .pm-pin.is-active .pm-pin__cuerpo { animation: none; transform: scale(1.25); }
   .pm-pin.is-active .pm-pin__onda, .pm-pin.is-active .pm-pin__sombra { animation: none; }
   .pm-fuera__tarjeta { animation: none; }

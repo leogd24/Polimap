@@ -16,6 +16,7 @@
 //              (la ruta accesible los evita).
 //   entradas → en qué nodo está la puerta de cada edificio: { numeroEdificio: nodo }
 //              Si tiene dos puertas: { numeroEdificio: [nodo1, nodo2] } (va a la más cercana).
+//              Si tiene dos puertas: { numeroEdificio: [nodo1, nodo2] } (va a la más cercana).
 //   provisional → true mientras sea una red de prueba (dibujada sin medir).
 // =====================================================================
 
@@ -60,6 +61,18 @@ export const PASILLOS = {
     [20.748076, -103.380230], // 30: pasillo arriba del edificio 10
     [20.748042, -103.380002], // 31: lado derecho, arriba del edificio 10
     [20.748209, -103.380207], // 32: hacia las canchas
+    [20.745971, -103.380440], // 33: puerta abajo del edificio 1
+    [20.746204, -103.380464], // 34: puerta abajo del edificio 2
+    [20.746376, -103.380435], // 35: puerta arriba del edificio 2
+    [20.746403, -103.380365], // 36: puerta abajo del edificio 3
+    [20.746588, -103.380338], // 37: puerta abajo del edificio 4
+    [20.746804, -103.380285], // 38: puerta abajo del edificio 5
+    [20.747040, -103.380347], // 39: puerta abajo del edificio 6
+    [20.747245, -103.380333], // 40: puerta abajo del edificio 7
+    [20.747587, -103.380297], // 41: puerta arriba del edificio 8
+    [20.747647, -103.380293], // 42: puerta abajo del edificio 9
+    [20.747847, -103.380259], // 43: puerta arriba del edificio 9
+    [20.747873, -103.380264], // 44: puerta abajo del edificio 10
   ],
   tramos: [
     [0, 1, 'escaleras'], // escaleras al entrar, antes del edificio 1
@@ -102,17 +115,29 @@ export const PASILLOS = {
     [29, 30],
     [30, 31],
     [30, 32, 'escaleras'], // escaleras después del 10, antes de las canchas
+    [2, 33],
+    [4, 34],
+    [6, 35],
+    [6, 36],
+    [9, 37],
+    [12, 38],
+    [15, 39],
+    [18, 40],
+    [24, 41],
+    [24, 42],
+    [27, 43],
+    [27, 44],
   ],
   entradas: {
-    1: 2, // puerta abajo
-    2: [4, 6], // puerta abajo y arriba
-    3: 6, // puerta abajo
-    4: 9, // puerta abajo
-    5: 12, // puerta abajo
-    6: 15, // puerta abajo
-    7: 18, // puerta abajo
-    8: 24, // puerta arriba
-    9: [24, 27], // puerta abajo y arriba
-    10: 27, // puerta abajo
+    1: 33, // puerta abajo
+    2: [34, 35], // puerta abajo y arriba
+    3: 36, // puerta abajo
+    4: 37, // puerta abajo
+    5: 38, // puerta abajo
+    6: 39, // puerta abajo
+    7: 40, // puerta abajo
+    8: 41, // puerta arriba
+    9: [42, 43], // puerta abajo y arriba
+    10: 44, // puerta abajo
   },
 };

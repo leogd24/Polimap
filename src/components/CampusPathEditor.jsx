@@ -12,16 +12,19 @@
 //   Escaleras → toca un tramo para marcarlo/desmarcarlo como escaleras.
 //   Entrada   → elige el edificio y toca el punto donde está su puerta.
 //   Borrar    → toca un punto o un tramo para quitarlo.
-//   "Punto aquí" → agrega un punto donde estás parado (GPS). Ideal para
-//                  caminar los pasillos de verdad e ir marcando las esquinas.
+//   "Punto aquí" → agrega un punto donde estás parado (GPS).
+//   "Grabar recorrido" → camina por los pasillos con el celular y la línea se
+//                  traza SOLA con el GPS. Al pasar por donde ya caminaste, se
+//                  une con esa línea (queda un cruce). Escaleras y entradas se
+//                  marcan después a mano. Necesita https (versión publicada).
 //
 // Al terminar: "Copiar" y pegar todo en src/data/campusPaths.js.
 // Lo que trazas se guarda en este navegador mientras trabajas (si recargas
 // no se pierde), pero lo que cuenta es lo que pegues en el archivo.
 // =====================================================================
 
-import { useEffect, useState } from 'react';
-import { CircleMarker, Polyline, Tooltip } from 'react-leaflet';
+import { useEffect, useRef, useState } from 'react';
+import { Circle, CircleMarker, Polyline, Tooltip } from 'react-leaflet';
 import { colors } from '../styles/theme.js';
 import Icon from './Icon';
 
@@ -30,6 +33,15 @@ const CLAVE_BORRADOR = 'polimap-trazar-pasillos';
 // Distancia (en metros) para considerar que tocaste un punto que ya existe
 // en vez de crear uno nuevo encima.
 const RADIO_IMAN = 4;
+
+// "Grabar recorrido" (ajusta estos números si la línea sale muy chueca):
+const GRABAR = {
+  precisionMaxima: 20, // ignora lecturas del GPS peores que ±20 m
+  cadaMetros: 5, // pone un punto cada 5 m caminados
+  promedioDe: 3, // promedia las últimas 3 lecturas para quitar el "temblor"
+  imanCruce: 7, // si pasas a menos de 7 m de una línea que ya existe, se une a ella
+  rectoGrados: 15, // si sigues casi derecho (menos de 15°), alarga el tramo en vez de poner otro punto
+};
 
 function leerBorrador() {
   try {
@@ -52,7 +64,7 @@ function copiaLimpia(pasillos) {
   return {
     nodos: (pasillos?.nodos ?? []).map(([lat, lng]) => [Number(lat), Number(lng)]),
     tramos: (pasillos?.tramos ?? []).map((t) => [...t]),
-    entradas: { ...(pasillos?.entradas ?? {}) },
+    entradas: Object.fromEntries(Object.entries(pasillos?.entradas ?? {}).map(([k, v]) => [k, [].concat(v)])),
   };
 }
 
@@ -65,7 +77,10 @@ function textoArchivo({ nodos, tramos, entradas }) {
     .join('\n');
   const lineasEntradas = Object.keys(entradas)
     .sort((a, b) => a - b)
-    .map((k) => `    ${k}: ${entradas[k]},`)
+    .map((k) => {
+      const puertas = [].concat(entradas[k]);
+      return `    ${k}: ${puertas.length === 1 ? puertas[0] : `[${puertas.join(', ')}]`},`;
+    })
     .join('\n');
   return `// =====================================================================
 // src/data/campusPaths.js
@@ -103,6 +118,13 @@ ${lineasEntradas}
 `;
 }
 
+// Rumbo de a hacia b en grados (0 = norte, 90 = este).
+function rumbo(a, b) {
+  const dy = b[0] - a[0];
+  const dx = (b[1] - a[1]) * Math.cos((a[0] * Math.PI) / 180);
+  return ((Math.atan2(dx, dy) * 180) / Math.PI + 360) % 360;
+}
+
 // Distancia rápida en metros (solo para el "imán").
 function metros(a, b) {
   const dy = (b[0] - a[0]) * 111320;
@@ -114,13 +136,18 @@ function metros(a, b) {
 // Hook con todo el estado de la herramienta
 // ---------------------------------------------------------------------
 export function useEditorPasillos(pasillosDelArchivo, activo) {
-  const [datos, setDatos] = useState(() => (activo && leerBorrador()) || copiaLimpia(pasillosDelArchivo));
+  const [datos, setDatos] = useState(() => copiaLimpia((activo && leerBorrador()) || pasillosDelArchivo));
   const [historial, setHistorial] = useState([]);
   const [herramienta, setHerramienta] = useState('pasillo'); // pasillo | escaleras | entrada | borrar
   const [seleccionado, setSeleccionado] = useState(null); // nodo donde sigue la cadena
   const [edificio, setEdificio] = useState(1); // para la herramienta Entrada
   const [mensaje, setMensaje] = useState('');
   const [textoCopiar, setTextoCopiar] = useState(null); // si el portapapeles falla
+  // Grabar recorrido
+  const [grabando, setGrabando] = useState(false);
+  const [gps, setGps] = useState(null); // última lectura { lat, lng, accuracy }
+  const [grabados, setGrabados] = useState([]); // nodos creados en esta grabación
+  const lecturasRef = useRef([]); // últimas lecturas buenas (para promediar)
 
   useEffect(() => {
     if (activo) guardarBorrador(datos);
@@ -167,8 +194,8 @@ export function useEditorPasillos(pasillosDelArchivo, activo) {
       tramos: d.tramos.filter(([a, b]) => a !== i && b !== i).map(([a, b, t]) => (t ? [re(a), re(b), t] : [re(a), re(b)])),
       entradas: Object.fromEntries(
         Object.entries(d.entradas)
-          .filter(([, n]) => n !== i)
-          .map(([k, n]) => [k, re(n)]),
+          .map(([k, lista]) => [k, lista.filter((n) => n !== i).map(re)])
+          .filter(([, lista]) => lista.length),
       ),
     }));
     setSeleccionado(null);
@@ -177,9 +204,21 @@ export function useEditorPasillos(pasillosDelArchivo, activo) {
   function tocarNodo(i) {
     if (herramienta === 'borrar') return borrarNodo(i);
     if (herramienta === 'entrada') {
-      cambiar((d) => ({ ...d, entradas: { ...d.entradas, [edificio]: i } }));
-      setMensaje(`Entrada del edificio ${edificio} lista.`);
-      setEdificio((e) => (e >= 10 ? e : e + 1)); // pasa al siguiente edificio
+      // Tocar una puerta la agrega; tocarla otra vez la quita.
+      // Así un edificio puede tener 2 puertas (como el 2 y el 9).
+      const lista = datos.entradas[edificio] ?? [];
+      const yaEsta = lista.includes(i);
+      const nueva = yaEsta ? lista.filter((n) => n !== i) : [...lista, i];
+      cambiar((d) => {
+        const entradas = { ...d.entradas, [edificio]: nueva };
+        if (!nueva.length) delete entradas[edificio];
+        return { ...d, entradas };
+      });
+      setMensaje(
+        yaEsta
+          ? `Puerta quitada del edificio ${edificio}.`
+          : `Puerta del edificio ${edificio} lista. ¿Tiene otra? Tócala; si no, elige el siguiente edificio.`,
+      );
       return;
     }
     if (herramienta !== 'pasillo') return;
@@ -237,8 +276,118 @@ export function useEditorPasillos(pasillosDelArchivo, activo) {
     }
   };
 
+  // -------------------------------------------------------------------
+  // Grabar recorrido con el GPS
+  // -------------------------------------------------------------------
+  // 1) Mientras graba, el GPS se mantiene encendido y la pantalla no se apaga.
+  useEffect(() => {
+    if (!grabando) return undefined;
+    let pantalla = null;
+    navigator.wakeLock?.request('screen').then((w) => (pantalla = w)).catch(() => {});
+    const id = navigator.geolocation.watchPosition(
+      (pos) => setGps({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }),
+      (error) => {
+        setMensaje(error.code === 1 ? 'Sin permiso de ubicación: actívalo en el candado de la barra.' : 'El GPS no responde; sal a un lugar abierto.');
+        if (error.code === 1) setGrabando(false);
+      },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 },
+    );
+    return () => {
+      navigator.geolocation.clearWatch(id);
+      pantalla?.release().catch(() => {});
+    };
+  }, [grabando]);
+
+  // 2) Cada lectura nueva del GPS decide si se pone un punto.
+  useEffect(() => {
+    if (!grabando || !gps) return;
+    if (gps.accuracy > GRABAR.precisionMaxima) {
+      setMensaje(`GPS impreciso (±${Math.round(gps.accuracy)} m). Espera un momento o sal de techo…`);
+      return;
+    }
+    // Promedio de las últimas lecturas: la línea sale menos temblorosa.
+    const lecturas = [...lecturasRef.current, [gps.lat, gps.lng]].slice(-GRABAR.promedioDe);
+    lecturasRef.current = lecturas;
+    const p = [
+      lecturas.reduce((t, l) => t + l[0], 0) / lecturas.length,
+      lecturas.reduce((t, l) => t + l[1], 0) / lecturas.length,
+    ];
+    setMensaje(`Grabando · ±${Math.round(gps.accuracy)} m · ${grabados.length} puntos`);
+
+    // Primer punto de la grabación: empieza aquí (o en una línea cercana).
+    if (seleccionado == null) {
+      const cerca = datos.nodos.findIndex((n) => metros(n, p) < GRABAR.imanCruce);
+      if (cerca >= 0) setSeleccionado(cerca);
+      else agregarNodoGrabado(p, null);
+      return;
+    }
+
+    const ultimo = datos.nodos[seleccionado];
+    if (metros(ultimo, p) < GRABAR.cadaMetros) return; // todavía no caminas lo suficiente
+
+    // ¿Pasaste junto a una línea que ya existe? Unirse a ese punto (cruce).
+    const cruce = datos.nodos.findIndex(
+      (n, i) => i !== seleccionado && !grabados.slice(-3).includes(i) && metros(n, p) < GRABAR.imanCruce,
+    );
+    if (cruce >= 0) {
+      if (!existeTramo(datos, seleccionado, cruce)) cambiar((d) => ({ ...d, tramos: [...d.tramos, [seleccionado, cruce]] }));
+      setSeleccionado(cruce);
+      return;
+    }
+
+    // ¿Vas casi derecho? Entonces se alarga el último tramo en vez de poner otro punto.
+    const previo = grabados.length >= 2 ? grabados[grabados.length - 2] : null;
+    const esDeEstaGrabacion = grabados[grabados.length - 1] === seleccionado;
+    const esSoloDePaso = datos.tramos.filter(([a, b]) => a === seleccionado || b === seleccionado).length === 1;
+    const esEntrada = Object.values(datos.entradas).flat().includes(seleccionado);
+    if (previo != null && esDeEstaGrabacion && esSoloDePaso && !esEntrada) {
+      const giro = Math.abs(((rumbo(datos.nodos[previo], ultimo) - rumbo(ultimo, p) + 540) % 360) - 180);
+      if (giro < GRABAR.rectoGrados) {
+        cambiar((d) => ({ ...d, nodos: d.nodos.map((n, i) => (i === seleccionado ? p : n)) }));
+        return;
+      }
+    }
+
+    agregarNodoGrabado(p, seleccionado);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gps]);
+
+  function agregarNodoGrabado(p, desde) {
+    const nuevo = datos.nodos.length;
+    cambiar((d) => ({
+      ...d,
+      nodos: [...d.nodos, p],
+      tramos: desde != null ? [...d.tramos, [desde, nuevo]] : d.tramos,
+    }));
+    setSeleccionado(nuevo);
+    setGrabados((g) => [...g, nuevo]);
+  }
+
+  const alternarGrabacion = () => {
+    if (grabando) {
+      setGrabando(false);
+      setSeleccionado(null);
+      setMensaje(`Grabación detenida: ${grabados.length} puntos nuevos. Revisa la línea y corrige con Borrar o Deshacer.`);
+      return;
+    }
+    if (!window.isSecureContext || !('geolocation' in navigator)) {
+      setMensaje('Para grabar se necesita https: abre la versión publicada en el celular.');
+      return;
+    }
+    setHerramienta('pasillo');
+    setSeleccionado(null);
+    setGrabados([]);
+    lecturasRef.current = [];
+    setGps(null);
+    setMensaje('Buscando GPS… empieza a caminar por el pasillo.');
+    setGrabando(true);
+  };
+
   return {
     activo,
+    grabando,
+    gps,
+    alternarGrabacion,
     datos,
     herramienta,
     seleccionado,
@@ -265,10 +414,31 @@ export function useEditorPasillos(pasillosDelArchivo, activo) {
 // ---------------------------------------------------------------------
 export function EditorCapas({ editor }) {
   const { datos, seleccionado, herramienta } = editor;
-  const entradaDe = Object.fromEntries(Object.entries(datos.entradas).map(([k, n]) => [n, k]));
+  // Qué edificio(s) tienen su puerta en cada punto: { nodo: '8 y 9' }
+  const entradaDe = {};
+  Object.entries(datos.entradas).forEach(([k, lista]) =>
+    lista.forEach((n) => (entradaDe[n] = entradaDe[n] ? `${entradaDe[n]} y ${k}` : k)),
+  );
 
   return (
     <>
+      {/* Mientras graba: dónde te ubica el GPS y qué tan preciso es */}
+      {editor.grabando && editor.gps && (
+        <>
+          <Circle
+            center={[editor.gps.lat, editor.gps.lng]}
+            radius={editor.gps.accuracy}
+            pathOptions={{ color: colors.blue, weight: 1, fillOpacity: 0.1 }}
+            interactive={false}
+          />
+          <CircleMarker
+            center={[editor.gps.lat, editor.gps.lng]}
+            radius={7}
+            pathOptions={{ color: 'white', weight: 3, fillColor: colors.blue, fillOpacity: 1 }}
+            interactive={false}
+          />
+        </>
+      )}
       {datos.tramos.map(([a, b, tipo], k) =>
         datos.nodos[a] && datos.nodos[b] ? (
           <Polyline
@@ -327,7 +497,7 @@ const HERRAMIENTAS = [
 const AYUDA = {
   pasillo: 'Toca el mapa para poner puntos en cadena. Toca un punto existente para unirte. Toca el dorado para cortar.',
   escaleras: 'Toca un tramo para marcarlo como escaleras (punteado dorado). Otra vez para quitarlo.',
-  entrada: 'Elige el edificio y toca el punto de su puerta. Pasa solo al siguiente.',
+  entrada: 'Elige el edificio y toca el punto de su puerta (si tiene dos, toca las dos). Tócala otra vez para quitarla.',
   borrar: 'Toca un punto o un tramo para quitarlo.',
 };
 
@@ -337,6 +507,8 @@ export function EditorPanel({ editor, posicion }) {
 
   return (
     <div className="pm-traza">
+      {/* Estilo del botón Grabar (lo demás del panel está en CampusMap.jsx) */}
+      <style>{ESTILO_GRABAR}</style>
       <div className="pm-traza__titulo">
         <Icon name="edit_road" size={20} />
         <strong>Trazar pasillos</strong>
@@ -374,8 +546,18 @@ export function EditorPanel({ editor, posicion }) {
 
       <p className="pm-traza__ayuda">{editor.mensaje || AYUDA[editor.herramienta]}</p>
 
+      {/* Grabar recorrido: la línea se traza sola mientras caminas */}
+      <button
+        type="button"
+        className={`pm-traza__grabar ${editor.grabando ? 'is-on' : ''}`}
+        onClick={editor.alternarGrabacion}
+      >
+        <Icon name={editor.grabando ? 'stop_circle' : 'radio_button_checked'} size={20} />
+        {editor.grabando ? 'Detener grabación' : 'Grabar recorrido caminando'}
+      </button>
+
       <div className="pm-traza__fila">
-        {editor.herramienta === 'pasillo' && (
+        {editor.herramienta === 'pasillo' && !editor.grabando && (
           <button
             type="button"
             className="pm-traza__chip"
@@ -416,3 +598,12 @@ export function EditorPanel({ editor, posicion }) {
     </div>
   );
 }
+
+const ESTILO_GRABAR = `
+.pm-traza__grabar {
+  display: flex; align-items: center; justify-content: center; gap: .4rem; min-height: 42px; border-radius: 999px;
+  font-weight: 700; font-size: .9rem; color: white; background: var(--pm-azul);
+}
+.pm-traza__grabar.is-on { background: var(--pm-carmesi); animation: pm-grabando 1.4s ease-in-out infinite; }
+@keyframes pm-grabando { 0%, 100% { opacity: 1; } 50% { opacity: .7; } }
+`;
