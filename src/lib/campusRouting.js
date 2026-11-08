@@ -74,7 +74,8 @@ export function crearRed(pasillos) {
   const nodos = (pasillos?.nodos ?? []).map(([lat, lng]) => [Number(lat), Number(lng)]);
   const tramos = (pasillos?.tramos ?? [])
     .filter(([a, b]) => nodos[a] && nodos[b] && a !== b)
-    .map(([a, b, tipo]) => ({ a, b, escaleras: tipo === 'escaleras', metros: distancia(nodos[a], nodos[b]) }));
+    // tipo: null (pasillo normal), 'escaleras' o 'rampa'.
+    .map(([a, b, tipo]) => ({ a, b, tipo: tipo ?? null, escaleras: tipo === 'escaleras', metros: distancia(nodos[a], nodos[b]) }));
   // vecinos[n] = lista de { hacia, tramo } para recorrer la red rápido.
   const vecinos = nodos.map(() => []);
   tramos.forEach((tramo) => {
@@ -106,6 +107,7 @@ export function nodoMasCercano(red, p) {
  * Ruta a pie desde `origen` ([lat, lng], tu ubicación) hasta el nodo `destino`.
  *   accesible → true para NO usar tramos con escaleras.
  *   lugares   → [{ nombre, punto: [lat, lng] }] para decir "junto al Edificio 5".
+ *   nombreDestino → cómo se nombra la meta: "la entrada del Edificio 3", "las canchas"…
  *
  * Regresa null si no hay forma de llegar, o:
  *   { puntos, metros, pasos, conEscaleras, nodos }
@@ -168,9 +170,9 @@ export function calcularRuta(red, origen, destino, opciones = {}) {
   if (costo[destino] === Infinity) return null;
 
   // 3.3 Reconstruir el camino de atrás hacia adelante.
-  const camino = []; // [{ nodo, escaleras (del tramo que llega a este nodo) }]
+  const camino = []; // [{ nodo, tipo (del tramo que llega a este nodo) }]
   for (let n = destino; n !== 'inicio'; n = anterior[n].desde) {
-    camino.unshift({ nodo: n, escaleras: anterior[n].tramo.escaleras });
+    camino.unshift({ nodo: n, tipo: anterior[n].tramo.tipo, escaleras: anterior[n].tramo.escaleras });
   }
   const puntos = [origen, pegado.punto, ...camino.map((c) => red.nodos[c.nodo])];
   const metros = pegado.metros + costo[destino];
@@ -212,33 +214,57 @@ function armarPasos(red, pegado, camino, lugares, nombreDestino) {
   const pasos = [];
   let actual = { icono: 'straight', texto: 'Camina por el pasillo', metros: 0 };
 
+  // Cómo se dice empezar un tramo especial (escaleras o rampa).
+  const ESPECIAL = {
+    escaleras: { icono: 'stairs', toma: 'toma las escaleras', Toma: 'Toma las escaleras' },
+    rampa: { icono: 'accessible_forward', toma: 'toma la rampa', Toma: 'Toma la rampa' },
+  };
+
+  // Dirección de cada tramo. Si una rampa (o escalera) está hecha de varios
+  // tramos seguidos, todos usan la dirección de la rampa completa: así sus
+  // dobleces no se cuentan como giros ("toma la rampa" es una sola indicación).
+  const tipos = pts.slice(0, -1).map((_, i) => camino[i]?.tipo ?? null);
+  const direccion = tipos.map((tipo, i) => {
+    if (!tipo) return rumbo(pts[i], pts[i + 1]);
+    let inicio = i;
+    let fin = i;
+    while (inicio > 0 && tipos[inicio - 1] === tipo) inicio--;
+    while (fin < tipos.length - 1 && tipos[fin + 1] === tipo) fin++;
+    return rumbo(pts[inicio], pts[fin + 1]);
+  });
+  let direccionAnterior = null;
+
   for (let i = 0; i < pts.length - 1; i++) {
     const metros = distancia(pts[i], pts[i + 1]);
     if (metros < 0.5) continue; // pedacito sin largo (quedaste justo en un nodo)
-    const escaleras = !!camino[i]?.escaleras;
+    const tipo = tipos[i]; // null, 'escaleras' o 'rampa'
 
-    // ¿Empieza un paso nuevo aquí? (por un giro, o porque empiezan/terminan escaleras)
+    // ¿Empieza un paso nuevo aquí? (por un giro, o porque empiezan/terminan escaleras o rampa)
     let g = null;
-    if (i > 0) {
-      const delta = ((rumbo(pts[i], pts[i + 1]) - rumbo(pts[i - 1], pts[i]) + 540) % 360) - 180;
+    if (direccionAnterior != null) {
+      const delta = ((direccion[i] - direccionAnterior + 540) % 360) - 180;
       g = giro(delta);
     }
-    const cambiaEscalera = escaleras !== !!actual.escaleras;
-    if (actual.metros > 0 && (g || cambiaEscalera)) {
+    direccionAnterior = direccion[i];
+    const cambiaTipo = tipo !== (actual.tipo ?? null);
+    const especial = ESPECIAL[tipo];
+    if (actual.metros > 0 && (g || cambiaTipo)) {
       pasos.push(actual);
       const lugar = lugarCercano(pts[i], lugares);
       const junto = lugar ? ` junto al ${lugar}` : '';
-      if (escaleras) {
-        // "Gira a la derecha y toma las escaleras" / "Toma las escaleras junto al Edificio 4"
-        actual = g ? { icono: 'stairs', texto: `${g.texto}${junto} y toma las escaleras` } : { icono: 'stairs', texto: `Toma las escaleras${junto}` };
+      if (especial) {
+        // "Gira a la derecha y toma la rampa" / "Toma las escaleras junto al Edificio 4"
+        actual = g
+          ? { icono: especial.icono, texto: `${g.texto}${junto} y ${especial.toma}` }
+          : { icono: especial.icono, texto: `${especial.Toma}${junto}` };
       } else {
         actual = g ? { ...g, texto: g.texto + junto } : { icono: 'straight', texto: `Sigue derecho por el pasillo${junto}` };
       }
       actual.metros = 0;
-    } else if (actual.metros === 0 && escaleras) {
-      actual = { icono: 'stairs', texto: 'Toma las escaleras', metros: 0 }; // el camino empieza con escaleras
+    } else if (actual.metros === 0 && especial) {
+      actual = { icono: especial.icono, texto: especial.Toma, metros: 0 }; // el camino empieza con escaleras o rampa
     }
-    actual.escaleras = escaleras;
+    actual.tipo = tipo;
     actual.metros += metros;
   }
   if (actual.metros > 0) pasos.push(actual);
@@ -251,11 +277,12 @@ function armarPasos(red, pegado, camino, lugares, nombreDestino) {
   if (pasos.length > 1 && ultimo.metros < 10 && /^turn_(slight_)?(left|right)$/.test(ultimo.icono)) {
     pasos.pop();
     const lado = ultimo.icono.endsWith('right') ? 'derecha' : 'izquierda';
-    pasos.push({ icono: 'flag', texto: `La entrada del ${nombreDestino} queda a tu ${lado}`, metros: 0 });
+    const meta = nombreDestino.charAt(0).toUpperCase() + nombreDestino.slice(1);
+    pasos.push({ icono: 'flag', texto: `${meta} queda a tu ${lado}`, metros: 0 });
   } else {
-    pasos.push({ icono: 'flag', texto: `Llegas a la entrada del ${nombreDestino}`, metros: 0 });
+    pasos.push({ icono: 'flag', texto: `Llegas a ${nombreDestino}`, metros: 0 });
   }
 
-  // Solo lo que necesita la pantalla (se quita la marca interna de escaleras).
+  // Solo lo que necesita la pantalla (se quita la marca interna del tipo de tramo).
   return pasos.map(({ icono, texto, metros }) => ({ icono, texto, metros }));
 }

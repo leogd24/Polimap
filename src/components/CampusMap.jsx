@@ -14,6 +14,9 @@
 //   6. Edificios en 3D (cajitas con relieve) y gotas estilo Google Maps con brinco.
 //   7. Si estás fuera del Poli: el mapa se pinta de rojo 4 s con un aviso al centro.
 //   8. ?trazar → herramienta para dibujar los pasillos (CampusPathEditor.jsx).
+//   9. "Venitas": los pasillos se ven siempre como líneas verdes delgadas.
+//  10. Lugares que no son edificios (canchas, cafetería) desde campusLugares.js.
+//  11. Se adapta al modo claro/oscuro de la app (colores de theme.css).
 //
 // Dependencias (una sola vez):  npm install leaflet@1.9 react-leaflet@4
 // =====================================================================
@@ -31,6 +34,7 @@ import { getBuildings } from '../lib/api.js';
 import Icon from './Icon';
 // Pasillos del Poli y el cálculo de rutas a pie.
 import { PASILLOS } from '../data/campusPaths.js';
+import { LUGARES_EXTRA } from '../data/campusLugares.js';
 import { crearRed, calcularRuta, nodoMasCercano, distancia as metrosEntre } from '../lib/campusRouting.js';
 // Herramienta para trazar los pasillos (solo con ?trazar).
 import { useEditorPasillos, EditorCapas, EditorPanel } from './CampusPathEditor.jsx';
@@ -130,6 +134,17 @@ const TAMANO_GOTA = 26;
 const METROS_LLEGADA = 15; // a esta distancia de la entrada se considera que llegaste
 const ALTO_BARRA_NAV = 84; // alto aproximado de la barra de arriba durante la navegación
 const MODO_TRAZAR = new URLSearchParams(window.location.search).has('trazar');
+
+// Lugares que no son edificios (canchas, cafetería…), listos para el mapa.
+// Se manejan igual que un edificio, pero su `number` es su id ('canchas') y no
+// tienen cajita 3D ni ficha.
+const LUGARES_MAPA = LUGARES_EXTRA.map((l) => ({
+  ...l,
+  number: l.id,
+  esLugar: true,
+  entrada: l.coords,
+  geo: { cajas: [], cima: l.coords },
+}));
 
 // Velocidad promedio caminando (metros por segundo) para estimar minutos.
 const VELOCIDAD_CAMINANDO = 1.3;
@@ -258,6 +273,14 @@ function geometria3D(numero, centro) {
   return { cajas, cima };
 }
 
+// Cómo se llama cada cosa del mapa (edificio o lugar como las canchas).
+//   nombreCorto → "Edificio 3" / "Late servir"
+//   nombreMeta  → para "Llegas a ___": "la entrada del Edificio 3" / "las canchas"
+//   aLaMeta     → para "¡Llegaste ___!": "al Edificio 3" / "a las canchas"
+const nombreCorto = (b) => (b.esLugar ? b.name : `Edificio ${b.number}`);
+const nombreMeta = (b) => (b.esLugar ? b.destino : `la entrada del Edificio ${b.number}`);
+const aLaMeta = (b) => (b.esLugar ? `a ${b.destino}` : `al Edificio ${b.number}`);
+
 // Evita que un nombre con < o & rompa el HTML del marcador.
 function escaparHtml(texto) {
   return String(texto).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -274,14 +297,18 @@ function iconoEdificio(edificio, activo) {
       className: 'pm-pin-wrap', // reemplaza el estilo por defecto de Leaflet
       html: `<div class="pm-pin">
           <span class="pm-pin__sombra"></span>
-          <span class="pm-pin__cuerpo"><span>${edificio.number}</span></span>
+          <span class="pm-pin__cuerpo">${
+            edificio.esLugar
+              ? `<span class="material-symbols-rounded pm-pin__icono">${escaparHtml(edificio.icono)}</span>`
+              : `<span>${edificio.number}</span>`
+          }</span>
         </div>`,
       iconSize: [TAMANO_PIN, TAMANO_PIN + 10],
       iconAnchor: [TAMANO_PIN / 2, TAMANO_PIN + 6], // la punta de la colita toca el techo
     });
   }
   const nombre = escaparHtml(edificio.name || `Edificio ${edificio.number}`);
-  const etiqueta = nombre.startsWith('Edificio') ? nombre : `${edificio.number} · ${nombre}`;
+  const etiqueta = edificio.esLugar || nombre.startsWith('Edificio') ? nombre : `${edificio.number} · ${nombre}`;
   return L.divIcon({
     className: 'pm-pin-wrap', // reemplaza el estilo por defecto de Leaflet
     html: `<div class="pm-gota${activo ? ' is-active' : ''}">
@@ -297,6 +324,14 @@ function iconoEdificio(edificio, activo) {
     iconAnchor: [TAMANO_GOTA / 2, ALTO_GOTA - 1], // la punta toca el techo del edificio
   });
 }
+
+// Iconito de rampa (silla de ruedas) sobre las rampas.
+const ICONO_RAMPA = L.divIcon({
+  className: 'pm-pin-wrap',
+  html: '<div class="pm-rampa"><span class="material-symbols-rounded">accessible</span></div>',
+  iconSize: [18, 18],
+  iconAnchor: [9, 9],
+});
 
 // Banderita en la entrada del edificio cuando hay ruta.
 const ICONO_META = L.divIcon({
@@ -450,6 +485,26 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
 
   // Red de pasillos (se arma una sola vez) y herramienta de trazado.
   const red = useMemo(() => crearRed(PASILLOS), []);
+  // Dónde poner el iconito de cada rampa: una rampa son 2 tramos seguidos
+  // (A → medio → B); el ícono va en el punto de en medio. Si es de un solo
+  // tramo, va a la mitad del tramo.
+  const puntosRampa = useMemo(() => {
+    const rampas = red.tramos.filter((t) => t.tipo === 'rampa');
+    const cuantas = {};
+    rampas.forEach((t) => {
+      cuantas[t.a] = (cuantas[t.a] ?? 0) + 1;
+      cuantas[t.b] = (cuantas[t.b] ?? 0) + 1;
+    });
+    const puntos = [];
+    rampas.forEach((t) => {
+      const otros = red.vecinos[t.b].filter((v) => v.tramo.tipo !== 'rampa').length;
+      if (cuantas[t.b] === 2 && otros === 0) puntos.push(red.nodos[t.b]); // punto de en medio
+      else if (cuantas[t.a] !== 2 && cuantas[t.b] !== 2) {
+        puntos.push([(red.nodos[t.a][0] + red.nodos[t.b][0]) / 2, (red.nodos[t.a][1] + red.nodos[t.b][1]) / 2]);
+      }
+    });
+    return puntos;
+  }, [red]);
   const editor = useEditorPasillos(PASILLOS, MODO_TRAZAR);
 
   const demo = useMemo(leerModoDemo, []);
@@ -483,9 +538,12 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
             return { ...b, coords, entrada, geo };
           })
           .filter(Boolean);
-        setEdificios(conCoordenadas);
+        setEdificios([...conCoordenadas, ...LUGARES_MAPA]);
       })
-      .catch(() => mostrarAviso('No se pudieron cargar los edificios.', 'error'));
+      .catch(() => {
+        setEdificios(LUGARES_MAPA); // al menos los lugares
+        mostrarAviso('No se pudieron cargar los edificios.', 'error');
+      });
     return () => {
       activo = false;
     };
@@ -688,7 +746,7 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
 
   // Lugares para las indicaciones ("Gira a la derecha junto al Edificio 5").
   const lugares = useMemo(
-    () => edificios.map((b) => ({ nombre: `Edificio ${b.number}`, punto: b.coords })),
+    () => edificios.filter((b) => !b.esLugar).map((b) => ({ nombre: `Edificio ${b.number}`, punto: b.coords })),
     [edificios],
   );
 
@@ -706,7 +764,7 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
   const ruta = useMemo(() => {
     if (!posicion || !contenidoHoja || !destino) return null;
     const origen = [posicion.lat, posicion.lng];
-    const opciones = { lugares, nombreDestino: `Edificio ${contenidoHoja.number}` };
+    const opciones = { lugares, nombreDestino: nombreMeta(contenidoHoja) };
     if (sinEscaleras) {
       const accesible = calcularRuta(red, origen, destino.nodo, { ...opciones, accesible: true });
       if (accesible) return accesible;
@@ -756,7 +814,7 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
     // La meta es el final de la ruta (la puerta elegida); sin ruta, la del edificio.
     const meta = ruta?.puntos.at(-1) ?? destino?.punto ?? seleccionado.entrada;
     if (metrosEntre([posicion.lat, posicion.lng], meta) < METROS_LLEGADA) {
-      mostrarAviso(`¡Llegaste al Edificio ${seleccionado.number}!`, 'ok', 6000);
+      mostrarAviso(`¡Llegaste ${aLaMeta(seleccionado)}!`, 'ok', 6000);
       terminarRuta();
       return;
     }
@@ -795,7 +853,7 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
   // Arrastrar la hoja del edificio: abajo = cerrar, arriba = abrir la ficha completa.
   const arrastreHoja = useArrastre({
     onAbajo: cerrarHoja,
-    onArriba: () => contenidoHoja && onOpenBuilding?.(contenidoHoja.number),
+    onArriba: () => contenidoHoja && !contenidoHoja.esLugar && onOpenBuilding?.(contenidoHoja.number),
   });
   // Arrastrar la tira de navegación: arriba = ver pasos, abajo = esconderlos, toque = alternar.
   const arrastreBandeja = useArrastre({
@@ -825,6 +883,10 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
         '--pm-pin': `${TAMANO_PIN}px`,
         '--pm-sombra': colors.blueDeep,
         '--pm-carmesi-osc': colors.crimsonDark,
+        // Modo claro/oscuro: fondo de las ventanitas y color del texto.
+        '--pm-fondo': colors.surface,
+        '--pm-tinta': colors.ink,
+        '--pm-venita': colors.green,
       }}
     >
       <style>{ESTILOS}</style>
@@ -859,6 +921,26 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
 
         <ControlMapa onTocarMapa={tocarMapa} onArrastrar={() => setSeguir(false)} />
         <UbicacionUsuario posicion={posicion} />
+
+        {/* Venitas: los pasillos siempre visibles como líneas verdes delgadas
+            (como CUCEA en Google Maps). Escaleras = punteado; rampa = más gruesa.
+            Van ANTES de los edificios para que las cajitas 3D queden encima. */}
+        {!MODO_TRAZAR &&
+          red.tramos.map((t, i) => (
+            <Polyline
+              key={`v${i}`}
+              positions={[red.nodos[t.a], red.nodos[t.b]]}
+              pathOptions={{
+                className: `pm-venita${t.tipo ? ` pm-venita--${t.tipo}` : ''}`,
+                weight: t.tipo === 'rampa' ? 4 : 2.5,
+                dashArray: t.escaleras ? '2 5' : null,
+              }}
+              interactive={false}
+            />
+          ))}
+        {/* Rampas: un iconito ♿ en cada una (en su punto de en medio) */}
+        {!MODO_TRAZAR &&
+          puntosRampa.map((p, i) => <Marker key={`r${i}`} position={p} icon={ICONO_RAMPA} interactive={false} />)}
 
         {/* Edificios en 3D. Se dibujan de arriba (norte) hacia abajo para que
             los de enfrente tapen a los de atrás, como en la vida real. */}
@@ -909,7 +991,7 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
               position={b.geo.cima}
               icon={iconoEdificio(b, b.number === seleccionadoNum)}
               zIndexOffset={b.number === seleccionadoNum ? 500 : 0}
-              title={b.name || `Edificio ${b.number}`}
+              title={b.name || nombreCorto(b)}
               eventHandlers={{ click: () => elegirEdificio(b.number) }}
             />
           ))}
@@ -996,7 +1078,7 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
             Jala hacia abajo para cerrar, hacia arriba para ver la ficha. */}
         <div className="pm-arrastre" {...arrastreHoja.props}>
           <div className="pm-hoja__asa" aria-hidden="true" />
-          {onOpenBuilding && (
+          {onOpenBuilding && !contenidoHoja?.esLugar && (
             <p className="pm-hoja__pista">
               {arrastreHoja.dy < -60 ? 'Suelta para ver la ficha' : 'Desliza hacia arriba para ver la ficha'}
             </p>
@@ -1015,15 +1097,17 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
               ) : (
                 <div
                   className="pm-hoja__numero"
-                  style={{ background: contenidoHoja.color ?? colors.blue }}
+                  style={{ background: contenidoHoja.color ?? (contenidoHoja.esLugar ? colors.grassDark : colors.blue) }}
                 >
-                  {contenidoHoja.number}
+                  {contenidoHoja.esLugar ? <Icon name={contenidoHoja.icono} size={28} /> : contenidoHoja.number}
                 </div>
               )}
               <div className="min-w-0 flex-1">
-                <p className="pm-hoja__sub">Edificio {contenidoHoja.number}</p>
-                <h2 className="pm-hoja__titulo">{contenidoHoja.name || `Edificio ${contenidoHoja.number}`}</h2>
-                {contenidoHoja.summary && <p className="pm-hoja__resumen">{contenidoHoja.summary}</p>}
+                <p className="pm-hoja__sub">{contenidoHoja.esLugar ? contenidoHoja.summary : `Edificio ${contenidoHoja.number}`}</p>
+                <h2 className="pm-hoja__titulo">{contenidoHoja.name || nombreCorto(contenidoHoja)}</h2>
+                {contenidoHoja.summary && !contenidoHoja.esLugar && (
+                  <p className="pm-hoja__resumen">{contenidoHoja.summary}</p>
+                )}
               </div>
               <button type="button" onClick={cerrarHoja} aria-label="Cerrar" className="pm-hoja__cerrar">
                 <Icon name="close" />
@@ -1044,7 +1128,7 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
                 <Icon name="directions_walk" />
                 Cómo llegar
               </button>
-              {onOpenBuilding && (
+              {onOpenBuilding && !contenidoHoja.esLugar && (
                 <button
                   type="button"
                   onClick={() => onOpenBuilding(contenidoHoja.number)}
@@ -1082,7 +1166,7 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
                 </>
               ) : (
                 <>
-                  <strong>Sigue la línea hacia el Edificio {contenidoHoja.number}</strong>
+                  <strong>Sigue la línea hacia {contenidoHoja.esLugar ? contenidoHoja.destino : `el Edificio ${contenidoHoja.number}`}</strong>
                   <span>Aún no hay pasillos trazados hasta aquí</span>
                 </>
               )}
@@ -1117,7 +1201,7 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
                     {distancia != null ? `${textoDistancia(distancia)} · ${minutos} min` : 'Calculando…'}
                   </strong>
                   <span>
-                    Edificio {contenidoHoja.number}
+                    {nombreCorto(contenidoHoja)}
                     {ruta?.conEscaleras ? ' · con escaleras' : ''}
                   </span>
                 </div>
@@ -1270,7 +1354,7 @@ const ESTILOS = `
 .pm-gota__nombre {
   position: absolute; left: calc(100% + 3px); top: 4px; white-space: nowrap;
   font-size: 12px; font-weight: 700; line-height: 1.2; color: var(--pm-carmesi-osc);
-  text-shadow: 0 0 2px white, 0 0 2px white, 0 0 3px white, 0 0 3px white;
+  text-shadow: 0 0 2px var(--pm-fondo), 0 0 2px var(--pm-fondo), 0 0 3px var(--pm-fondo), 0 0 3px var(--pm-fondo);
   pointer-events: none; transition: font-size .2s ease;
 }
 .pm-gota.is-active .pm-gota__forma { animation: pm-gota-brinco .7s cubic-bezier(.3,.7,.4,1) both; }
@@ -1285,6 +1369,20 @@ const ESTILOS = `
   100% { transform: translateY(0) scale(1.4); }
 }
 
+/* Texto de las ventanitas: sigue el tema (claro u oscuro) */
+.pm-hoja, .pm-bandeja, .pm-traza { color: var(--pm-tinta); }
+.pm-btn--principal { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pm-tinta) 20%, transparent); }
+
+/* Venitas (pasillos) y rampas */
+.pm-venita { stroke: var(--pm-venita); stroke-opacity: .85; stroke-linecap: round; fill: none; }
+.pm-venita--escaleras { stroke-opacity: .7; }
+.pm-rampa {
+  width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--pm-venita); color: white; border: 1.5px solid white; box-shadow: 0 1px 3px rgb(0 0 0 / .3);
+}
+.pm-rampa .material-symbols-rounded { font-size: 13px; }
+.pm-pin__icono { font-size: calc(var(--pm-pin) * .6); }
+
 /* Ruta de "Cómo llegar" */
 .pm-ruta-borde { stroke: white; stroke-linecap: round; stroke-linejoin: round; fill: none; }
 .pm-ruta { stroke: var(--pm-azul); stroke-linecap: round; stroke-linejoin: round; fill: none; }
@@ -1298,7 +1396,7 @@ const ESTILOS = `
 /* Zonas para arrastrar (la hoja del edificio y la tira de navegación) */
 .pm-arrastre { touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
 .pm-arrastre:active { cursor: grabbing; }
-.pm-hoja__pista { margin: -6px 0 6px; text-align: center; font-size: .72rem; color: var(--pm-azul); opacity: .6; }
+.pm-hoja__pista { margin: -6px 0 6px; text-align: center; font-size: .72rem; color: var(--pm-tinta); opacity: .6; }
 
 /* Navegación: barra de arriba */
 .pm-navbar {
@@ -1319,11 +1417,11 @@ const ESTILOS = `
 .pm-bandeja {
   position: absolute; left: 0; right: 0; bottom: 0; z-index: 1100;
   max-height: 55%; overflow-y: auto; overscroll-behavior: contain;
-  background: white; border-radius: 20px 20px 0 0; box-shadow: 0 -6px 24px rgb(0 0 0 / .18);
+  background: var(--pm-fondo); border-radius: 20px 20px 0 0; box-shadow: 0 -6px 24px rgb(0 0 0 / .18);
   padding-bottom: env(safe-area-inset-bottom, 0px);
   animation: pm-sube .3s cubic-bezier(.2,.8,.2,1) both; transition: transform .2s ease;
 }
-.pm-bandeja__resumen { color: var(--pm-azul); }
+.pm-bandeja__resumen { color: var(--pm-tinta); }
 .pm-bandeja__resumen strong { display: block; font-size: 1.05rem; }
 .pm-bandeja__resumen span { font-size: .82rem; opacity: .75; }
 .pm-bandeja__detalle { display: flex; flex-direction: column; gap: .6rem; padding: 0 1.25rem 1.1rem; }
@@ -1338,19 +1436,19 @@ const ESTILOS = `
 .pm-nav__paso strong { display: block; font-size: 1.02rem; line-height: 1.25; }
 .pm-nav__paso span { font-size: .85rem; opacity: .85; }
 .pm-nav__icono { flex: none; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: color-mix(in srgb, white 14%, transparent); }
-.pm-nav__buscando, .pm-nav__aviso { display: flex; align-items: center; gap: .4rem; font-size: .85rem; color: var(--pm-azul); }
+.pm-nav__buscando, .pm-nav__aviso { display: flex; align-items: center; gap: .4rem; font-size: .85rem; color: var(--pm-tinta); }
 .pm-nav__aviso { opacity: .85; }
 .pm-nav__opciones { display: flex; flex-wrap: wrap; gap: .5rem; }
 .pm-chip {
   display: inline-flex; align-items: center; gap: .3rem; min-height: 36px; padding: 0 .8rem; border-radius: 999px;
-  font-size: .85rem; font-weight: 600; color: var(--pm-azul);
-  background: color-mix(in srgb, var(--pm-azul) 8%, white); border: 1.5px solid transparent;
+  font-size: .85rem; font-weight: 600; color: var(--pm-tinta);
+  background: color-mix(in srgb, var(--pm-tinta) 8%, var(--pm-fondo)); border: 1.5px solid transparent;
 }
-.pm-chip.is-on { background: color-mix(in srgb, var(--pm-oro) 25%, white); border-color: var(--pm-oro); }
+.pm-chip.is-on { background: color-mix(in srgb, var(--pm-oro) 25%, var(--pm-fondo)); border-color: var(--pm-oro); }
 .pm-nav__lista { display: flex; flex-direction: column; gap: .1rem; margin: 0; padding: 0; list-style: none; }
 .pm-nav__lista li {
-  display: flex; align-items: center; gap: .6rem; padding: .5rem .25rem; font-size: .9rem; color: var(--pm-azul);
-  border-bottom: 1px solid color-mix(in srgb, var(--pm-azul) 10%, white);
+  display: flex; align-items: center; gap: .6rem; padding: .5rem .25rem; font-size: .9rem; color: var(--pm-tinta);
+  border-bottom: 1px solid color-mix(in srgb, var(--pm-tinta) 10%, var(--pm-fondo));
 }
 .pm-nav__lista li span { flex: 1; }
 .pm-nav__lista li small { opacity: .7; white-space: nowrap; }
@@ -1358,7 +1456,7 @@ const ESTILOS = `
 /* Herramienta ?trazar */
 .pm-traza {
   position: absolute; top: 10px; left: 10px; right: 10px; z-index: 1150; display: flex; flex-direction: column; gap: .45rem;
-  padding: .7rem; border-radius: 16px; background: white; color: var(--pm-azul); box-shadow: 0 6px 20px rgb(0 0 0 / .25);
+  padding: .7rem; border-radius: 16px; background: var(--pm-fondo); color: var(--pm-tinta); box-shadow: 0 6px 20px rgb(0 0 0 / .25);
   max-height: 60%; overflow-y: auto;
 }
 .pm-traza__titulo { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; font-size: .95rem; }
@@ -1366,16 +1464,16 @@ const ESTILOS = `
 .pm-traza__fila { display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; }
 .pm-traza__chip {
   display: inline-flex; align-items: center; gap: .25rem; min-height: 34px; padding: 0 .65rem; border-radius: 999px;
-  font-size: .82rem; font-weight: 600; background: color-mix(in srgb, var(--pm-azul) 8%, white); color: var(--pm-azul);
+  font-size: .82rem; font-weight: 600; background: color-mix(in srgb, var(--pm-tinta) 8%, var(--pm-fondo)); color: var(--pm-tinta);
 }
 .pm-traza__chip:disabled { opacity: .4; }
 .pm-traza__chip.is-on { background: var(--pm-azul); color: white; }
 .pm-traza__chip--principal { background: var(--pm-carmesi); color: white; }
 .pm-traza__edificio { font-size: .85rem; font-weight: 600; }
-.pm-traza__edificio select { border: 1px solid color-mix(in srgb, var(--pm-azul) 30%, white); border-radius: 8px; padding: .2rem .4rem; }
+.pm-traza__edificio select { border: 1px solid color-mix(in srgb, var(--pm-tinta) 30%, var(--pm-fondo)); border-radius: 8px; padding: .2rem .4rem; }
 .pm-traza__ayuda { font-size: .8rem; line-height: 1.35; margin: 0; }
 .pm-traza__copiar { display: flex; flex-direction: column; gap: .35rem; font-size: .8rem; }
-.pm-traza__copiar textarea { width: 100%; height: 140px; font-family: monospace; font-size: 11px; border: 1px solid color-mix(in srgb, var(--pm-azul) 30%, white); border-radius: 8px; }
+.pm-traza__copiar textarea { width: 100%; height: 140px; font-family: monospace; font-size: 11px; border: 1px solid color-mix(in srgb, var(--pm-tinta) 30%, var(--pm-fondo)); border-radius: 8px; }
 .pm-traza-etiqueta { font-weight: 700; font-size: 11px; }
 
 /* Fuera del Poli: capa roja sobre el mapa + tarjeta al centro (dura 4 s) */
@@ -1386,11 +1484,11 @@ const ESTILOS = `
 }
 .pm-fuera__tarjeta {
   display: flex; flex-direction: column; align-items: center; gap: .35rem; text-align: center;
-  padding: 1.2rem 1.6rem; border-radius: 20px; background: white; color: var(--pm-carmesi);
+  padding: 1.2rem 1.6rem; border-radius: 20px; background: var(--pm-fondo); color: var(--pm-carmesi);
   box-shadow: 0 10px 30px rgb(0 0 0 / .3); animation: pm-fuera-tarjeta .5s cubic-bezier(.3,.7,.4,1) both;
 }
 .pm-fuera__tarjeta strong { font-size: 1.25rem; font-weight: 800; }
-.pm-fuera__tarjeta span:last-child { font-size: .9rem; color: var(--pm-azul); }
+.pm-fuera__tarjeta span:last-child { font-size: .9rem; color: var(--pm-tinta); }
 @keyframes pm-fuera-capa { 0% { opacity: 0; } 8% { opacity: 1; } 88% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes pm-fuera-tarjeta {
   0% { transform: scale(.6); } 60% { transform: scale(1.08); }
@@ -1412,39 +1510,39 @@ const ESTILOS = `
   box-shadow: 0 4px 14px rgb(0 0 0 / .25); display: flex; align-items: center; gap: .5rem;
 }
 .pm-aviso--error { background: var(--pm-carmesi); border-radius: 1rem; }
-.pm-demo { font-size: .7rem; font-weight: 700; padding: .1rem .4rem; border-radius: .3rem; background: var(--pm-oro); color: var(--pm-azul); }
+.pm-demo { font-size: .7rem; font-weight: 700; padding: .1rem .4rem; border-radius: .3rem; background: var(--pm-oro); color: var(--pm-sombra); }
 
 /* Botón dorado "Mi ubicación" */
 .pm-fab {
   position: absolute; right: 16px; z-index: 1100; width: 52px; height: 52px; border-radius: 50%;
-  display: grid; place-items: center; background: var(--pm-oro); color: var(--pm-azul);
+  display: grid; place-items: center; background: var(--pm-oro); color: var(--pm-sombra);
   box-shadow: 0 4px 12px rgb(0 0 0 / .3); transition: bottom .28s cubic-bezier(.2,.8,.2,1);
   -webkit-tap-highlight-color: transparent;
 }
 .pm-fab:active { transform: scale(.94); }
-.pm-fab.is-on { color: var(--pm-azul); outline: 3px solid white; }
+.pm-fab.is-on { color: var(--pm-sombra); outline: 3px solid white; }
 
 /* Hoja inferior (bottom sheet) */
 .pm-hoja {
   position: absolute; left: 0; right: 0; bottom: 0; z-index: 1100;
   max-height: 45%; overflow-y: auto; overscroll-behavior: contain;
-  background: white; border-radius: 20px 20px 0 0;
+  background: var(--pm-fondo); border-radius: 20px 20px 0 0;
   box-shadow: 0 -6px 24px rgb(0 0 0 / .18);
   padding-bottom: env(safe-area-inset-bottom, 0px);
   transform: translateY(110%); transition: transform .28s cubic-bezier(.2,.8,.2,1);
 }
 .pm-hoja[data-abierta="true"] { transform: none; }
-.pm-hoja__asa { width: 40px; height: 5px; border-radius: 3px; margin: 10px auto 12px; background: color-mix(in srgb, var(--pm-azul) 25%, white); }
+.pm-hoja__asa { width: 40px; height: 5px; border-radius: 3px; margin: 10px auto 12px; background: color-mix(in srgb, var(--pm-tinta) 25%, var(--pm-fondo)); }
 .pm-hoja__foto, .pm-hoja__numero { width: 56px; height: 56px; border-radius: 14px; flex: none; object-fit: cover; }
 .pm-hoja__numero { display: grid; place-items: center; color: white; font-size: 1.4rem; font-weight: 700; }
-.pm-hoja__sub { font-size: .8rem; color: var(--pm-carmesi); font-weight: 600; }
-.pm-hoja__titulo { font-size: 1.15rem; font-weight: 700; color: var(--pm-azul); line-height: 1.25; }
+.pm-hoja__sub { font-size: .8rem; color: var(--pm-carmesi-osc); font-weight: 600; }
+.pm-hoja__titulo { font-size: 1.15rem; font-weight: 700; color: var(--pm-tinta); line-height: 1.25; }
 .pm-hoja__resumen { font-size: .9rem; opacity: .75; margin-top: .15rem; }
 .pm-hoja__texto { font-size: .92rem; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.pm-hoja__meta { font-size: .85rem; color: var(--pm-azul); font-weight: 600; }
+.pm-hoja__meta { font-size: .85rem; color: var(--pm-tinta); font-weight: 600; }
 .pm-hoja__cerrar {
   flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center;
-  background: color-mix(in srgb, var(--pm-azul) 8%, white); color: var(--pm-azul);
+  background: color-mix(in srgb, var(--pm-tinta) 8%, var(--pm-fondo)); color: var(--pm-tinta);
 }
 
 /* Botones de la hoja */
@@ -1454,7 +1552,7 @@ const ESTILOS = `
 }
 .pm-btn:active { transform: scale(.98); }
 .pm-btn--principal { background: var(--pm-azul); color: white; }
-.pm-btn--secundario { background: color-mix(in srgb, var(--pm-azul) 8%, white); color: var(--pm-azul); }
+.pm-btn--secundario { background: color-mix(in srgb, var(--pm-tinta) 8%, var(--pm-fondo)); color: var(--pm-tinta); }
 
 /* Accesibilidad: sin animaciones si el usuario lo pidió en su sistema */
 @media (prefers-reduced-motion: reduce) {

@@ -10,6 +10,8 @@
 //               Toca un punto que ya existe para unirte a él (cruces).
 //               Toca el punto dorado (el seleccionado) para cortar la cadena.
 //   Escaleras → toca un tramo para marcarlo/desmarcarlo como escaleras.
+//   Rampa     → toca un tramo para marcarlo/desmarcarlo como rampa (la ruta
+//               "Sin escaleras" la usa).
 //   Entrada   → elige el edificio y toca el punto donde está su puerta.
 //   Borrar    → toca un punto o un tramo para quitarlo.
 //   "Punto aquí" → agrega un punto donde estás parado (GPS).
@@ -27,6 +29,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Circle, CircleMarker, Polyline, Tooltip } from 'react-leaflet';
 import { colors } from '../styles/theme.js';
 import Icon from './Icon';
+import { LUGARES_EXTRA } from '../data/campusLugares.js';
 
 const CLAVE_BORRADOR = 'polimap-trazar-pasillos';
 
@@ -73,7 +76,7 @@ function textoArchivo({ nodos, tramos, entradas }) {
   const r6 = (n) => Number(n.toFixed(6));
   const lineasNodos = nodos.map(([lat, lng], i) => `    [${r6(lat)}, ${r6(lng)}], // ${i}`).join('\n');
   const lineasTramos = tramos
-    .map(([a, b, tipo]) => (tipo === 'escaleras' ? `    [${a}, ${b}, 'escaleras'],` : `    [${a}, ${b}],`))
+    .map(([a, b, tipo]) => (tipo ? `    [${a}, ${b}, '${tipo}'],` : `    [${a}, ${b}],`))
     .join('\n');
   const lineasEntradas = Object.keys(entradas)
     .sort((a, b) => a - b)
@@ -97,6 +100,7 @@ function textoArchivo({ nodos, tramos, entradas }) {
 //   nodos    → puntos [lat, lng] (esquinas, cruces y entradas). Su número es su lugar en la lista.
 //   tramos   → pasillos que unen dos nodos: [desde, hasta]
 //              Si el tramo tiene escaleras: [desde, hasta, 'escaleras']
+//              Si es una rampa:              [desde, hasta, 'rampa']
 //              (la ruta accesible los evita).
 //   entradas → en qué nodo está la puerta de cada edificio: { numeroEdificio: nodo }
 //   provisional → true mientras sea una red de prueba (dibujada sin medir).
@@ -138,7 +142,7 @@ function metros(a, b) {
 export function useEditorPasillos(pasillosDelArchivo, activo) {
   const [datos, setDatos] = useState(() => copiaLimpia((activo && leerBorrador()) || pasillosDelArchivo));
   const [historial, setHistorial] = useState([]);
-  const [herramienta, setHerramienta] = useState('pasillo'); // pasillo | escaleras | entrada | borrar
+  const [herramienta, setHerramienta] = useState('pasillo'); // pasillo | escaleras | rampa | entrada | borrar
   const [seleccionado, setSeleccionado] = useState(null); // nodo donde sigue la cadena
   const [edificio, setEdificio] = useState(1); // para la herramienta Entrada
   const [mensaje, setMensaje] = useState('');
@@ -235,10 +239,12 @@ export function useEditorPasillos(pasillosDelArchivo, activo) {
   const tocarTramo = (k) => {
     if (herramienta === 'borrar') {
       cambiar((d) => ({ ...d, tramos: d.tramos.filter((_, j) => j !== k) }));
-    } else if (herramienta === 'escaleras') {
+    } else if (herramienta === 'escaleras' || herramienta === 'rampa') {
+      // Tocar un tramo le pone ese tipo; tocarlo otra vez lo regresa a pasillo normal.
+      const tipo = herramienta;
       cambiar((d) => ({
         ...d,
-        tramos: d.tramos.map((t, j) => (j === k ? (t[2] === 'escaleras' ? [t[0], t[1]] : [t[0], t[1], 'escaleras']) : t)),
+        tramos: d.tramos.map((t, j) => (j === k ? (t[2] === tipo ? [t[0], t[1]] : [t[0], t[1], tipo]) : t)),
       }));
     }
   };
@@ -445,7 +451,7 @@ export function EditorCapas({ editor }) {
             key={`t${k}-${a}-${b}-${tipo ?? ''}`}
             positions={[datos.nodos[a], datos.nodos[b]]}
             pathOptions={{
-              color: tipo === 'escaleras' ? colors.gold : colors.crimson,
+              color: tipo === 'escaleras' ? colors.gold : tipo === 'rampa' ? colors.green : colors.crimson,
               weight: 6,
               dashArray: tipo === 'escaleras' ? '4 8' : null,
               lineCap: 'round',
@@ -490,6 +496,7 @@ export function EditorCapas({ editor }) {
 const HERRAMIENTAS = [
   { id: 'pasillo', icono: 'timeline', texto: 'Pasillo' },
   { id: 'escaleras', icono: 'stairs', texto: 'Escaleras' },
+  { id: 'rampa', icono: 'accessible_forward', texto: 'Rampa' },
   { id: 'entrada', icono: 'door_front', texto: 'Entrada' },
   { id: 'borrar', icono: 'delete', texto: 'Borrar' },
 ];
@@ -497,6 +504,7 @@ const HERRAMIENTAS = [
 const AYUDA = {
   pasillo: 'Toca el mapa para poner puntos en cadena. Toca un punto existente para unirte. Toca el dorado para cortar.',
   escaleras: 'Toca un tramo para marcarlo como escaleras (punteado dorado). Otra vez para quitarlo.',
+  rampa: 'Toca un tramo para marcarlo como rampa (verde). La ruta "Sin escaleras" pasa por aquí. Otra vez para quitarlo.',
   entrada: 'Elige el edificio y toca el punto de su puerta (si tiene dos, toca las dos). Tócala otra vez para quitarla.',
   borrar: 'Toca un punto o un tramo para quitarlo.',
 };
@@ -534,10 +542,19 @@ export function EditorPanel({ editor, posicion }) {
       {editor.herramienta === 'entrada' && (
         <label className="pm-traza__fila pm-traza__edificio">
           Edificio:
-          <select value={editor.edificio} onChange={(e) => editor.setEdificio(Number(e.target.value))}>
+          <select
+            value={editor.edificio}
+            onChange={(e) => editor.setEdificio(/^\d+$/.test(e.target.value) ? Number(e.target.value) : e.target.value)}
+          >
             {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
               <option key={n} value={n}>
                 {n} {datos.entradas[n] != null ? '✓' : ''}
+              </option>
+            ))}
+            {/* Lugares que no son edificios (src/data/campusLugares.js) */}
+            {LUGARES_EXTRA.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name} {datos.entradas[l.id] != null ? '✓' : ''}
               </option>
             ))}
           </select>
