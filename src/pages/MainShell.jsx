@@ -13,6 +13,7 @@ import ScheduleScreen from './ScheduleScreen.jsx';
 import BuildingDetailScreen from './BuildingDetailScreen.jsx';
 import AssistantScreen from './AssistantScreen.jsx';
 import PerdidosScreen from './PerdidosScreen.jsx';
+import MyReportsScreen from './MyReportsScreen.jsx';
 import LoginRequired from '../components/LoginRequired.jsx';
 import AparienciaSheet from '../components/AparienciaSheet.jsx';
 import { campusBuildings } from '../data/campusBuildings.js';
@@ -55,6 +56,8 @@ export default function MainShell({ user, onLogout, onRequestLogin }) {
 
   const openAssistant = () => setStack((previous) => [...previous, { type: 'assistant' }]);
   const openPerdidos = () => setStack((previous) => [...previous, { type: 'perdidos' }]);
+  // "Mis reportes" (Katia): se abre desde Reportar.
+  const openMyReports = () => setStack((previous) => [...previous, { type: 'misReportes' }]);
   // salon (opcional): salón a resaltar en "Por dentro" (ej. desde Horario).
   const openBuilding = (building, salon = null) => building && setStack((previous) => [...previous, { type: 'detail', building, salon }]);
   const verPorDentro = (numero, salon) => openBuilding(campusBuildings.find((b) => b.number === Number(numero)), salon);
@@ -94,7 +97,7 @@ export default function MainShell({ user, onLogout, onRequestLogin }) {
     <CampusMapScreen onOpenBuilding={openBuilding} focus={mapFocus} />,
     <BuildingsScreen onOpenBuilding={openBuilding} />,
     // Reportar es lo único que pide cuenta: el invitado ve por qué y cómo entrar.
-    user ? <ReportScreen user={user} /> : <LoginRequired onLogin={onRequestLogin} />,
+    user ? <ReportScreen user={user} onOpenMyReports={openMyReports} /> : <LoginRequired onLogin={onRequestLogin} />,
     <ScheduleScreen onShowOnMap={showOnMap} onVerPorDentro={verPorDentro} user={user} />,
   ];
 
@@ -235,6 +238,9 @@ export default function MainShell({ user, onLogout, onRequestLogin }) {
       )}
       {top && top.type === 'perdidos' && (
         <PerdidosScreen user={user} onBack={pop} onRequestLogin={onRequestLogin} onShowOnMap={showOnMap} />
+      )}
+      {top && top.type === 'misReportes' && (
+        <MyReportsScreen onBack={pop} onNewReport={() => goToTab(3)} onShowOnMap={showOnMap} />
       )}
       {top && top.type === 'assistant' && (
         <AssistantScreen onBack={pop} onShowOnMap={showOnMap} onNavigate={goToTab} />
