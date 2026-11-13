@@ -96,7 +96,8 @@ const ROOM_COLORS = {
 /// Login (Alexis): solo se muestra con sesión (MainShell). El reporte se envía
 /// con createReport() de src/lib/api.js; la cookie de sesión dice quién lo manda.
 /// La foto y el GPS reales los integra Katia.
-export default function ReportScreen({ user }) {
+// onOpenMyReports: abre "Mis reportes" (MyReportsScreen.jsx, se apila desde MainShell).
+export default function ReportScreen({ user, onOpenMyReports }) {
   const [category, setCategory] = useState(null);
   const [location, setLocation] = useState(null);
   // Salón o espacio dentro del edificio (opcional): 'A05', 'L07', 'BAN'…
@@ -271,7 +272,7 @@ export default function ReportScreen({ user }) {
             }
           : {
               title: 'Reporte enviado',
-              content: `Tu folio es ${result.folio}. Quedó registrado y el equipo del Poli le dará seguimiento.`,
+              content: `Tu folio es ${result.folio}. Quedó registrado y el equipo del Poli le dará seguimiento. Puedes verlo en "Mis reportes".`,
             }
       );
     } catch (error) {
@@ -299,6 +300,34 @@ export default function ReportScreen({ user }) {
 
   return (
     <div className="app-scroll flex-1 px-[18px] pt-3 pb-[30px]">
+      {/* Acceso a "Mis reportes": seguimiento de lo que ya envió el alumno */}
+      {onOpenMyReports && (
+        <button
+          type="button"
+          onClick={onOpenMyReports}
+          className="tappable mb-3 flex w-full items-center gap-3 p-[14px] text-left"
+          style={{
+            backgroundColor: colors.surface,
+            border: `1px solid ${colors.border}`,
+            borderRadius: 'var(--radius-card)',
+          }}
+        >
+          <span
+            className="flex h-10 w-10 shrink-0 items-center justify-center"
+            style={{ backgroundColor: colors.blueTint, borderRadius: 12 }}
+          >
+            <Icon name="assignment" size={22} color={colors.blue} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-extrabold">Mis reportes</span>
+            <span className="block text-xs" style={{ color: colors.textSecondary }}>
+              Revisa el estado y la respuesta del equipo
+            </span>
+          </span>
+          <Icon name="chevron_right" color={colors.textMuted} />
+        </button>
+      )}
+
       <div
         className="flex items-start p-[18px]"
         style={{
