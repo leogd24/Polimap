@@ -213,7 +213,7 @@ export const faqEntries = [
   {
     id: 20,
     question: '¿Dónde pido prestado un cable HDMI?',
-    answer: 'Los cables HDMI se piden en el segundo piso, del lado derecho. Preséntate con tu credencial del Poli.',
+    answer: 'Los cables HDMI se piden en el segundo piso, del lado izquierdo. Preséntate con tu credencial del Poli.',
     keywords: ['hdmi', 'cable', 'cable hdmi', 'proyector'],
     category: 'servicios',
     buildingNumber: 3,
@@ -222,7 +222,7 @@ export const faqEntries = [
   {
     id: 21,
     question: '¿Dónde me prestan una computadora?',
-    answer: 'Las computadoras se piden en el segundo piso, del lado derecho. Preséntate con tu credencial del Poli.',
+    answer: 'Las computadoras se piden en el segundo piso, del lado izquierdo. Preséntate con tu credencial del Poli.',
     keywords: ['computadora', 'computadoras', 'compu', 'laptop'],
     category: 'servicios',
     buildingNumber: 3,
@@ -231,7 +231,7 @@ export const faqEntries = [
   {
     id: 22,
     question: '¿Dónde piden balones para jugar?',
-    answer: 'Los balones se piden en el segundo piso, del lado derecho. Preséntate con tu credencial del Poli.',
+    answer: 'Los balones se piden en el segundo piso, del lado izquierdo. Preséntate con tu credencial del Poli.',
     keywords: ['balon', 'balones', 'pelota', 'prestamo de balon'],
     category: 'servicios',
     buildingNumber: 3,
@@ -242,7 +242,7 @@ export const faqEntries = [
     id: 33,
     question: '¿Qué me prestan en el Poli?',
     answer:
-      'En el segundo piso, del lado derecho, prestan cables HDMI, computadoras y balones para jugar. Preséntate con tu credencial del Poli.',
+      'En el segundo piso, del lado izquierdo, prestan cables HDMI, computadoras y balones para jugar. Preséntate con tu credencial del Poli.',
     keywords: ['prestamo', 'prestamos', 'prestan', 'prestar', 'prestamo de equipo', 'pedir prestado'],
     category: 'servicios',
     buildingNumber: 3,

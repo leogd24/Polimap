@@ -44,126 +44,64 @@ export default function BuildingDetailScreen({ building, onBack, salon = null })
 
       <div
         className="app-scroll flex-1"
-        onScroll={(event) => setScrolled(event.currentTarget.scrollTop > 190)}
+        onScroll={(event) => setScrolled(event.currentTarget.scrollTop > 110)}
       >
-        {/* Cabecera de 245 px con degradado del color del edificio. */}
+        {/* Cabecera sencilla con el color del edificio. */}
         <div
-          className="relative overflow-hidden"
+          className="flex items-end gap-4 px-6 pb-5"
           style={{
-            height: 245,
-            background: `linear-gradient(to bottom right, ${building.color}, ${alpha(building.color, 0.72)})`,
+            paddingTop: 'calc(72px + env(safe-area-inset-top))',
+            backgroundColor: building.color,
           }}
         >
-          <div style={{ position: 'absolute', right: -25, bottom: -20 }}>
-            <Icon name={building.icon} size={210} color={alpha(colors.white, 0.12)} />
-          </div>
           <div
-            className="absolute flex items-center justify-center"
-            style={{
-              left: 24,
-              top: 95,
-              width: 68,
-              height: 68,
-              borderRadius: 21,
-              backgroundColor: colors.white,
-            }}
+            className="flex shrink-0 items-center justify-center"
+            style={{ width: 56, height: 56, borderRadius: 18, backgroundColor: colors.white }}
           >
-            <Icon name={building.icon} size={34} color={building.color} />
+            <Icon name={building.icon} size={30} color={building.color} />
           </div>
-          <div
-            className="absolute text-2xl font-black"
-            style={{ left: 24, bottom: 16, right: 24, color: colors.white }}
-          >
-            {building.name}
+          <div className="min-w-0" style={{ color: colors.white }}>
+            <div className="text-sm font-bold" style={{ opacity: 0.85 }}>
+              Edificio {building.number}
+            </div>
+            <div className="text-2xl font-black leading-tight">{building.name}</div>
           </div>
         </div>
 
         <div className="px-[18px] pt-5 pb-8">
-          <div className="font-black" style={{ color: building.color }}>
-            Edificio {building.number}
-          </div>
+          {building.description === '' ? (
+            <MissingInfo />
+          ) : (
+            <p className="m-0 text-base" style={{ lineHeight: 1.45, color: colors.textSecondary }}>
+              {building.description}
+            </p>
+          )}
 
-          <div className="mt-[6px]">
-            {building.description === '' ? (
-              <MissingInfo />
-            ) : (
-              <p
-                className="m-0 text-base"
-                style={{ lineHeight: 1.45, color: colors.textSecondary }}
-              >
-                {building.description}
-              </p>
-            )}
-          </div>
-
-          {/* Por dentro: el esquema con tu salón resaltado (Alexis) */}
-          <div className="mt-[22px]">
-            <DetailTitle icon="domain" title="Por dentro" />
-          </div>
-          <div className="mt-[10px]">
-            <EdificioPorDentro number={building.number} salon={salon} />
-          </div>
-
-          <div className="mt-[22px]">
-            <DetailTitle icon="room_service" title="Servicios" />
-          </div>
-          <div className="mt-[10px]">
-            {building.services.length === 0 ? (
-              <MissingInfo />
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {building.services.map((service) => (
-                  <span
-                    key={service}
-                    className="inline-flex items-center gap-[6px] px-3 py-[6px] text-sm"
-                    style={{
-                      borderRadius: 8,
-                      border: `1px solid ${alpha(building.color, 0.18)}`,
-                      backgroundColor: alpha(building.color, 0.07),
-                    }}
-                  >
-                    <Icon name="check_circle" size={17} color={building.color} />
-                    {service}
-                  </span>
-                ))}
+          {/* Qué hay aquí: lista simple de espacios */}
+          {building.spaces.length > 0 && (
+            <>
+              <div className="mt-6">
+                <DetailTitle icon="layers" title="Qué hay aquí" />
               </div>
-            )}
-          </div>
-
-          <div className="mt-[22px]">
-            <DetailTitle icon="layers" title="Espacios" />
-          </div>
-          <div className="mt-2">
-            {building.spaces.length === 0 ? (
-              <MissingInfo />
-            ) : (
-              <Card>
-                {building.spaces.map((space, index) => (
-                  <div key={space}>
-                    <div className="flex items-center px-4 py-3">
-                      <div
-                        className="flex shrink-0 items-center justify-center rounded-full"
-                        style={{
-                          width: 40,
-                          height: 40,
-                          backgroundColor: alpha(building.color, 0.1),
-                          color: building.color,
-                        }}
-                      >
-                        {index + 1}
-                      </div>
-                      <span className="ml-4">{space}</span>
-                    </div>
-                    {index < building.spaces.length - 1 && <Divider indent={72} />}
-                  </div>
+              <ul className="m-0 mt-2 list-none p-0">
+                {building.spaces.map((space) => (
+                  <li
+                    key={space}
+                    className="flex items-center gap-3 py-[10px]"
+                    style={{ borderBottom: `1px solid ${colors.border}` }}
+                  >
+                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: building.color }} />
+                    <span>{space}</span>
+                  </li>
                 ))}
-              </Card>
-            )}
-          </div>
+              </ul>
+            </>
+          )}
 
+          {/* Trámites y requisitos (ya incluyen los servicios) */}
           {building.procedures.length > 0 && (
             <>
-              <div className="mt-[22px]">
+              <div className="mt-6">
                 <DetailTitle icon="assignment_turned_in" title="Trámites y requisitos" />
               </div>
               <div className="mt-2">
@@ -171,19 +109,14 @@ export default function BuildingDetailScreen({ building, onBack, salon = null })
                   {building.procedures.map((procedure, index) => (
                     <div key={procedure.name}>
                       <div className="px-4 py-[14px]">
-                        <div className="font-extrabold" style={{ color: building.color }}>
+                        <div className="font-extrabold" style={{ color: colors.textPrimary }}>
                           {procedure.name}
                         </div>
-                        <div
-                          className="mt-1"
-                          style={{ color: colors.textSecondary, lineHeight: 1.4 }}
-                        >
+                        <div className="mt-1 text-sm" style={{ color: colors.textSecondary, lineHeight: 1.4 }}>
                           {procedure.details}
                         </div>
                       </div>
-                      {index < building.procedures.length - 1 && (
-                        <Divider indent={16} endIndent={16} />
-                      )}
+                      {index < building.procedures.length - 1 && <Divider indent={16} endIndent={16} />}
                     </div>
                   ))}
                 </Card>
@@ -191,22 +124,45 @@ export default function BuildingDetailScreen({ building, onBack, salon = null })
             </>
           )}
 
-          <div className="mt-[18px]">
-            <InfoTile
-              icon="schedule"
-              title="Horario de atención"
-              body={building.hours === '' ? 'Sin información' : building.hours}
-              color={building.color}
-            />
+          {/* Servicios: solo si no vienen ya como trámites */}
+          {building.procedures.length === 0 && building.services.length > 0 && (
+            <>
+              <div className="mt-6">
+                <DetailTitle icon="room_service" title="Servicios" />
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {building.services.map((service) => (
+                  <span
+                    key={service}
+                    className="px-3 py-[6px] text-sm"
+                    style={{ borderRadius: 8, backgroundColor: alpha(building.color, 0.08) }}
+                  >
+                    {service}
+                  </span>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* Por dentro: el esquema con tu salón resaltado (Alexis) */}
+          <div className="mt-6">
+            <DetailTitle icon="domain" title="Por dentro" />
           </div>
           <div className="mt-[10px]">
-            <InfoTile
-              icon="accessible_forward"
-              title="Accesibilidad"
-              body={building.accessibility === '' ? 'Sin información' : building.accessibility}
-              color={building.color}
-            />
+            <EdificioPorDentro number={building.number} salon={salon} />
           </div>
+
+          {/* Horario y accesibilidad: solo cuando hay datos */}
+          {building.hours !== '' && (
+            <div className="mt-[18px]">
+              <InfoTile icon="schedule" title="Horario de atención" body={building.hours} color={building.color} />
+            </div>
+          )}
+          {building.accessibility !== '' && (
+            <div className="mt-[10px]">
+              <InfoTile icon="accessible_forward" title="Accesibilidad" body={building.accessibility} color={building.color} />
+            </div>
+          )}
 
           <div className="mt-5">
             <FilledButton

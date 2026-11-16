@@ -7,7 +7,6 @@ import UserAvatar from '../components/UserAvatar.jsx';
 import AccountSheet from '../components/AccountSheet.jsx';
 import HomeScreen from './HomeScreen.jsx';
 import CampusMapScreen from './CampusMapScreen.jsx';
-import BuildingsScreen from './BuildingsScreen.jsx';
 import ReportScreen from './ReportScreen.jsx';
 import ScheduleScreen from './ScheduleScreen.jsx';
 import BuildingDetailScreen from './BuildingDetailScreen.jsx';
@@ -20,20 +19,20 @@ import { useApariencia } from '../lib/tema.js';
 
 // Accesos rápidos del ícono instalado (manifest.webmanifest → shortcuts):
 // /?tab=horario abre directo esa pestaña; /?asistente=1 abre el asistente.
-const PESTANAS = { inicio: 0, mapa: 1, edificios: 2, reportar: 3, horario: 4 };
+const PESTANAS = { inicio: 0, mapa: 1, reportar: 3, horario: 4 };
 const parametros = new URLSearchParams(window.location.search);
 
 const titles = ['Inicio', 'Mapa del campus', 'Edificios', 'Reportar', 'Mi horario'];
 
-// Cada pestaña tiene un color de la Paleta Oficial del Politécnico.
+// Barra de abajo: solo Inicio y Mapa (diseño limpio).
+// Reportar (3) y Horario (4) siguen existiendo como pantallas: se abren desde
+// los accesos de Inicio y los botones flotantes del mapa,
+// y muestran una flecha para regresar.
 //   accent: color oficial (fondo de la pastilla cuando está seleccionada)
 //   onDark: versión legible como texto/ícono sobre la barra noche (≥ 4.5:1)
 const destinations = [
   { icon: 'home', label: 'Inicio', accent: colors.cyan, onDark: colors.cyan },
   { icon: 'map', label: 'Mapa', accent: colors.green, onDark: colors.green },
-  { icon: 'apartment', label: 'Edificios', accent: colors.gold, onDark: colors.gold },
-  { icon: 'add_alert', label: 'Reportar', accent: colors.crimson, onDark: colors.crimsonLight },
-  { icon: 'calendar_month', label: 'Horario', accent: colors.magenta, onDark: colors.magentaLight },
 ];
 
 /// Equivalente de screens/main_shell.dart
@@ -43,6 +42,14 @@ const destinations = [
 ///   onRequestLogin abrir el inicio de sesión (invitado que quiere reportar)
 export default function MainShell({ user, onLogout, onRequestLogin }) {
   const [currentIndex, setCurrentIndex] = useState(() => PESTANAS[parametros.get('tab')] ?? 0);
+  // Desde dónde se abrió Reportar/Horario (Inicio o Mapa), para la flecha de regresar.
+  const [origen, setOrigen] = useState(0);
+  const navegar = (index) => {
+    if (index < 2) setOrigen(index);
+    else if (currentIndex < 2) setOrigen(currentIndex);
+    setCurrentIndex(index);
+  };
+  const enSeccion = currentIndex >= 2; // Reportar u Horario
   const [accountOpen, setAccountOpen] = useState(false);
   // Apariencia y accesibilidad (tema oscuro, letra grande…)
   const [apariencia, cambiarApariencia] = useApariencia();
@@ -71,19 +78,19 @@ export default function MainShell({ user, onLogout, onRequestLogin }) {
   const [mapFocus, setMapFocus] = useState(null);
   const showOnMap = (number) => {
     setStack([]);
-    setCurrentIndex(1);
+    navegar(1);
     setMapFocus({ number, vez: Date.now() });
   };
   // Asistente → "Ir a Mi horario" / "Ir a Reportar"
   const goToTab = (index) => {
     setStack([]);
-    setCurrentIndex(index);
+    navegar(index);
   };
 
   // IndexedStack: las cinco pantallas se mantienen montadas y conservan su estado.
   const pages = [
     <HomeScreen
-      onNavigate={setCurrentIndex}
+      onNavigate={navegar}
       onOpenAssistant={openAssistant}
       onOpenBuilding={openBuilding}
       onOpenPerdidos={openPerdidos}
@@ -91,8 +98,9 @@ export default function MainShell({ user, onLogout, onRequestLogin }) {
       onRequestLogin={onRequestLogin}
       focusId={focusNotice}
     />,
-    <CampusMapScreen onOpenBuilding={openBuilding} focus={mapFocus} />,
-    <BuildingsScreen onOpenBuilding={openBuilding} />,
+    <CampusMapScreen onOpenBuilding={openBuilding} focus={mapFocus} onNavigate={navegar} />,
+    // 2: antes Edificios. La info de cada edificio se ve tocándolo en el mapa.
+    null,
     // Reportar es lo único que pide cuenta: el invitado ve por qué y cómo entrar.
     user ? <ReportScreen user={user} /> : <LoginRequired onLogin={onRequestLogin} />,
     <ScheduleScreen onShowOnMap={showOnMap} onVerPorDentro={verPorDentro} user={user} />,
@@ -112,7 +120,20 @@ export default function MainShell({ user, onLogout, onRequestLogin }) {
           minHeight: 'calc(64px + env(safe-area-inset-top))',
         }}
       >
-        <PolimapLogo size={38} />
+        {enSeccion ? (
+          <button
+            type="button"
+            onClick={() => navegar(origen)}
+            title="Regresar"
+            aria-label="Regresar"
+            className="tappable -ml-2 flex items-center justify-center rounded-full border-0 bg-transparent"
+            style={{ width: 44, height: 44 }}
+          >
+            <Icon name="arrow_back" color={colors.white} />
+          </button>
+        ) : (
+          <PolimapLogo size={38} />
+        )}
         <div className="ml-3 min-w-0 flex-1 py-2">
           <h1 className="m-0 truncate text-xl font-extrabold">{titles[currentIndex]}</h1>
           <div className="truncate text-[0.6875rem] font-medium">
@@ -191,12 +212,13 @@ export default function MainShell({ user, onLogout, onRequestLogin }) {
         }}
       >
         {destinations.map((destination, index) => {
-          const selected = index === currentIndex;
+          // En Reportar/Horario queda marcada la pestaña de donde vienes.
+          const selected = index === (enSeccion ? origen : currentIndex);
           return (
             <button
               key={destination.label}
               type="button"
-              onClick={() => setCurrentIndex(index)}
+              onClick={() => navegar(index)}
               aria-current={selected ? 'page' : undefined}
               className="flex flex-1 flex-col items-center gap-1 pt-3 pb-2"
               style={{ WebkitTapHighlightColor: 'transparent' }}

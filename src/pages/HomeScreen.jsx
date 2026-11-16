@@ -3,6 +3,7 @@ import { colors } from '../styles/theme.js';
 import { campusBuildings } from '../data/campusBuildings.js';
 import Icon from '../components/Icon.jsx';
 import PushCard from '../components/PushCard.jsx';
+import AccesosFlotantes from '../components/AccesosFlotantes.jsx';
 import AvisosInicio from '../components/AvisosInicio.jsx';
 import CommentsSheet from '../components/CommentsSheet.jsx';
 import SaludoInicio from '../components/SaludoInicio.jsx';
@@ -76,20 +77,26 @@ export default function HomeScreen({ onNavigate, onOpenAssistant, onOpenBuilding
     if (vista) window.dispatchEvent(new CustomEvent('polimap:vista-horario', { detail: vista }));
   };
 
-  // Accesos con el color de cada sección, igual que la barra de abajo.
+  // Accesos con el color de cada sección (Mapa ya está en la barra de abajo).
   const accesos = [
-    { icon: 'map', label: 'Mapa', color: colors.greenDark, onTap: () => onNavigate(1) },
     { icon: 'calendar_month', label: 'Horario', color: colors.magentaDark, onTap: () => irAHorario('dia') },
     { icon: 'add_alert', label: 'Reportar', color: colors.crimsonDark, onTap: () => onNavigate(3) },
-    { icon: 'apartment', label: 'Edificios', color: colors.goldDark, onTap: () => onNavigate(2) },
     { icon: 'travel_explore', label: 'Perdidos', color: colors.cyanDark, onTap: onOpenPerdidos },
     { icon: 'event_note', label: 'Fechas', color: colors.crimsonDark, onTap: () => irAHorario('fechas') },
     { icon: 'calculate', label: 'Mis notas', color: colors.greenDark, onTap: () => irAHorario('notas') },
     { icon: 'badge', label: 'Control Escolar', color: colors.ink, onTap: () => onOpenBuilding(campusBuildings.find((b) => b.number === 1)) },
   ];
 
+  // Botones flotantes (igual que en el mapa): Horario y Reportar.
+  const flotantes = [
+    { icon: 'calendar_month', label: 'Horario', color: colors.magentaDark, onTap: () => irAHorario('dia') },
+    { icon: 'add_alert', label: 'Reportar', color: colors.crimsonDark, onTap: () => onNavigate(3) },
+  ];
+
   return (
-    <div className="app-scroll flex-1 px-4 pt-4 pb-8">
+    <div className="relative flex min-h-0 flex-1 flex-col">
+    {/* pb-28: deja espacio al final para que los botones flotantes no tapen nada */}
+    <div className="app-scroll flex-1 px-4 pt-4 pb-28">
       <div className="mx-auto flex max-w-[620px] flex-col gap-5">
         {/* 1. Saludo y tu clase */}
         <SaludoInicio
@@ -185,6 +192,8 @@ export default function HomeScreen({ onNavigate, onOpenAssistant, onOpenBuilding
         />
       )}
       <style>{`.inicio-chips{scrollbar-width:none}.inicio-chips::-webkit-scrollbar{display:none}`}</style>
+    </div>
+    <AccesosFlotantes accesos={flotantes} className="absolute right-5 z-10" style={{ bottom: 20 }} />
     </div>
   );
 }

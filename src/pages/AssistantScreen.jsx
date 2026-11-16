@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { colors, alpha } from '../styles/theme.js';
 import { faqEntries } from '../data/faqEntries.js';
 import { campusBuildings } from '../data/campusBuildings.js';
-import { getBuildings, getFaq } from '../lib/api.js';
 import { answerQuestion, STARTER_SUGGESTIONS } from '../lib/assistantBot.js';
 import Icon from '../components/Icon.jsx';
 import PolimapLogo from '../components/PolimapLogo.jsx';
@@ -39,9 +38,9 @@ const WELCOME = {
 ///   onNavigate   → (opcional) función(indicePestaña). Si existe, aparecen los
 ///                  botones "Ir a Mi horario" / "Ir a Reportar".
 export default function AssistantScreen({ onBack, onShowOnMap, onNavigate }) {
-  // Arranca con los datos locales y luego intenta traer los de la API.
-  const [faq, setFaq] = useState(faqEntries);
-  const [buildings, setBuildings] = useState(campusBuildings);
+  // Preguntas y edificios salen de src/data/ (no hace falta la base de datos).
+  const faq = faqEntries;
+  const buildings = campusBuildings;
   const [messages, setMessages] = useState([WELCOME]);
   const [draft, setDraft] = useState('');
   const [typing, setTyping] = useState(false);
@@ -50,16 +49,8 @@ export default function AssistantScreen({ onBack, onShowOnMap, onNavigate }) {
   const timer = useRef(null);
   const endRef = useRef(null);
 
-  // 1. Datos: API → si falla, api.js regresa los locales.
-  useEffect(() => {
-    let active = true;
-    getFaq().then((data) => active && Array.isArray(data) && data.length && setFaq(data));
-    getBuildings().then((data) => active && Array.isArray(data) && data.length && setBuildings(data));
-    return () => {
-      active = false;
-      clearTimeout(timer.current);
-    };
-  }, []);
+  // 1. Al cerrar el asistente, cancela la respuesta que estaba "escribiendo".
+  useEffect(() => () => clearTimeout(timer.current), []);
 
   // 2. Bajar hasta el último mensaje cada vez que llega uno nuevo.
   useEffect(() => {

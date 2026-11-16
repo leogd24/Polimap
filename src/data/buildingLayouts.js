@@ -59,7 +59,82 @@ const PISOS = { 2: 2, 9: 2, 10: 2 };
 // - Las escaleras se agregan solas A LA MITAD de cada piso, como en el Poli
 //   (pon escaleras: false si el edificio no las lleva así, o escríbelas tú
 //   con 'ESC' en el lugar que van).
-const AJUSTES = {};
+// Espacio con nombre (oficina, biblioteca…). `id` se queda igual que en el
+// esquema automático (S01, S02…) para que los reportes viejos sigan cayendo
+// en el mismo lugar.
+const esp = (id, nombre, corto = nombre, ancho) => ({ id, nombre, corto, tipo: 'espacio', ...(ancho ? { ancho } : {}) });
+const ESC = 'ESC';
+
+// Corregidos con lo que dijo el equipo (izquierda → derecha, escaleras al centro).
+// E4, E6, E9 y E10 siguen con el esquema automático.
+const AJUSTES = {
+  // E1: sin baños (los alumnos no tienen acceso).
+  1: {
+    plantas: {
+      3: [ESC, esp('S03', 'Coordinación')],
+      2: [ESC, esp('S02', 'Oficinas de PLEX')],
+      1: [ESC, esp('S01', 'Atención a alumnos')],
+    },
+  },
+  // E2: biblioteca abajo; arriba el auditorio con los baños a un lado.
+  2: {
+    pisos: 2,
+    plantas: {
+      2: [esp('S02', 'Auditorio', 'Auditorio', 3), ESC, 'BAN'],
+      1: [esp('S01', 'Biblioteca', 'Biblioteca', 3)],
+    },
+  },
+  // E3: en el 2º piso, a la izquierda el Lab. 1 junto al préstamo de equipo;
+  // a la derecha el Lab. 2.
+  3: {
+    plantas: {
+      3: ['A01', 'A02', ESC, 'A03', 'A04'],
+      2: ['L01', esp('S01', 'Préstamo de equipo'), ESC, 'L02'],
+      1: ['BAN', ESC],
+    },
+  },
+  // E5: sin baños. Planta baja: Coordinación y Psicología a la izquierda;
+  // Lab. 3, Lab. 4 y la oficina del Oficial Mayor a la derecha.
+  5: {
+    plantas: {
+      3: ['A01', 'A02', ESC, 'A03', 'A04'],
+      2: ['A05', 'A06', ESC, 'A07', 'A08'],
+      1: [
+        esp('S01', 'Coordinación de Servicio y Prácticas Profesionales', 'Coord. Servicio y Prácticas'),
+        esp('S03', 'Psicología'),
+        ESC,
+        'L03',
+        'L04',
+        esp('S02', 'Oficina del Oficial Mayor', 'Of. Oficial Mayor'),
+      ],
+    },
+  },
+  // E7: el sistema de internet pegado a las aulas 5 y 6; abajo, baños y Lab. 5
+  // a la izquierda, Lab. 6 y la oficina del maestro del internet a la derecha.
+  // A09 sale en los horarios oficiales: se deja a la derecha para no perderla.
+  7: {
+    plantas: {
+      3: ['A01', 'A02', ESC, 'A03', 'A04'],
+      2: ['A05', 'A06', esp('S01', 'Sistema de internet del plantel', 'Sistema de internet'), ESC, 'A07', 'A08'],
+      1: ['BAN', 'L05', ESC, 'A09', 'L06', esp('S02', 'Oficina del maestro a cargo del internet', 'Of. maestro a cargo del internet')],
+    },
+  },
+  // E8: igual que antes, pero los baños de la planta baja van a la derecha.
+  8: {
+    plantas: {
+      3: ['A02', 'L09', ESC, esp('S01', 'Estudio de audio y video'), esp('S04', 'Oficina del Departamento de Computación', 'Of. Computación')],
+      2: ['L08', 'T02', ESC, { id: 'S03', nombre: 'Taller de energía eólica', corto: 'Taller energía eólica', tipo: 'taller' }],
+      1: [
+        'L07',
+        'T01',
+        ESC,
+        { id: 'S02', nombre: 'Laboratorio de sistemas híbridos', corto: 'Lab. sistemas híbridos', tipo: 'lab' },
+        esp('S05', 'Oficina del Departamento de Telecomunicaciones y Energías Alternas', 'Of. Telecomunicaciones'),
+        'BAN',
+      ],
+    },
+  },
+};
 
 // ---------------------------------------------------------------------
 // PASO 3. Leer los salones de los horarios
@@ -131,7 +206,7 @@ function acortar(nombre) {
     .replace(/ y Energías Alternas$/i, '');
 }
 
-// "Planta alta: auditorio" o "Segundo piso, lado derecho: préstamo" → { piso: 2, nombre }
+// "Planta alta: auditorio" o "Segundo piso, lado izquierdo: préstamo" → { piso: 2, nombre }
 function leerEspacioTexto(texto, pisos) {
   let piso = null;
   let nombre = texto;

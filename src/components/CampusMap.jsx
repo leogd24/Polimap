@@ -28,10 +28,11 @@ import 'leaflet/dist/leaflet.css';
 
 // Colores: SOLO desde theme.js (paleta UdeG). Nada de hex sueltos aquí.
 import { colors } from '../styles/theme.js';
-// Los edificios se piden a api.js (si la API falla, api.js usa src/data/campusBuildings.js).
-import { getBuildings } from '../lib/api.js';
+// Los edificios salen directo de src/data/campusBuildings.js (no hace falta la base de datos).
+import { campusBuildings } from '../data/campusBuildings.js';
 // Ícono reutilizado del proyecto (Material Symbols).
 import Icon from './Icon';
+import AccesosFlotantes from './AccesosFlotantes.jsx';
 // Pasillos del Poli y el cálculo de rutas a pie.
 import { PASILLOS } from '../data/campusPaths.js';
 import { LUGARES_EXTRA } from '../data/campusLugares.js';
@@ -455,7 +456,9 @@ function UbicacionUsuario({ posicion }) {
 //                    se vuelva a abrir aunque sea el mismo edificio.
 //   onOpenBuilding → (opcional) función(numero) para abrir la ficha completa.
 //   alto           → alto del mapa. Por defecto toda la pantalla.
-export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding, alto = '100dvh' }) {
+// accesos (opcional): [{ icon, label, color, onTap }] → botones flotantes a la
+// derecha, encima del botón dorado (Horario, Reportar).
+export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding, alto = '100dvh', accesos = [] }) {
   const mapaRef = useRef(null);
   const hojaRef = useRef(null);
   const watchIdRef = useRef(null);
@@ -519,7 +522,7 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
   // --- 5.1 Cargar edificios y asignar coordenadas ---
   useEffect(() => {
     let activo = true;
-    Promise.resolve(getBuildings())
+    Promise.resolve(campusBuildings)
       .then((lista) => {
         if (!activo || !Array.isArray(lista)) return;
         const conCoordenadas = lista
@@ -1051,6 +1054,12 @@ export default function CampusMap({ focusNumber = null, focusKey, onOpenBuilding
         </div>
       )}
 
+      {/* Accesos flotantes (Horario, Reportar): una columna sencilla
+          encima del botón dorado. Se esconden durante "Cómo llegar". */}
+      {accesos.length > 0 && !rutaActiva && !MODO_TRAZAR && (
+        <AccesosFlotantes accesos={accesos} className="pm-accesos" style={{ bottom: alturaVisible + 92 }} />
+      )}
+
       {/* Botón dorado "Mi ubicación" (sube cuando se abre la hoja) */}
       <button
         type="button"
@@ -1511,6 +1520,9 @@ const ESTILOS = `
 }
 .pm-aviso--error { background: var(--pm-carmesi); border-radius: 1rem; }
 .pm-demo { font-size: .7rem; font-weight: 700; padding: .1rem .4rem; border-radius: .3rem; background: var(--pm-oro); color: var(--pm-sombra); }
+
+/* Accesos flotantes (Horario, Reportar) */
+.pm-accesos { position: absolute; right: 20px; z-index: 1100; transition: bottom .28s cubic-bezier(.2,.8,.2,1); }
 
 /* Botón dorado "Mi ubicación" */
 .pm-fab {

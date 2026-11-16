@@ -108,9 +108,9 @@ export const campusBuildings = [
     name: 'Edificio 3',
     summary: 'Préstamo de equipo: cable HDMI, computadoras y balones',
     description:
-      'En el segundo piso, del lado derecho, se prestan cables HDMI, computadoras y balones para jugar.',
+      'En el segundo piso, del lado izquierdo, se prestan cables HDMI, computadoras y balones para jugar.',
     services: ['Préstamo de cable HDMI', 'Préstamo de computadoras', 'Préstamo de balones'],
-    spaces: ['Segundo piso, lado derecho: préstamo de equipo'],
+    spaces: ['Segundo piso, lado izquierdo: préstamo de equipo'],
     hours: '',
     accessibility: '',
     icon: 'cable',
@@ -119,17 +119,17 @@ export const campusBuildings = [
       {
         name: 'Préstamo de cable HDMI',
         details:
-          'En el segundo piso, del lado derecho. Preséntate con tu credencial del Poli.',
+          'En el segundo piso, del lado izquierdo. Preséntate con tu credencial del Poli.',
       },
       {
         name: 'Préstamo de computadoras',
         details:
-          'En el segundo piso, del lado derecho. Preséntate con tu credencial del Poli.',
+          'En el segundo piso, del lado izquierdo. Preséntate con tu credencial del Poli.',
       },
       {
         name: 'Préstamo de balones',
         details:
-          'En el segundo piso, del lado derecho. Preséntate con tu credencial del Poli.',
+          'En el segundo piso, del lado izquierdo. Preséntate con tu credencial del Poli.',
       },
     ],
   },
@@ -150,7 +150,8 @@ export const campusBuildings = [
     number: 5,
     name: 'Edificio 5',
     summary: 'Psicología, Servicio y Prácticas Profesionales y Oficialía Mayor',
-    description: '',
+    description:
+      'Aquí están la coordinación de Servicio y Prácticas Profesionales (también ve Titulación), el área de Psicología y la oficina del Oficial Mayor.',
     services: [
       'Psicología',
       'Servicio y prácticas profesionales',
@@ -159,6 +160,7 @@ export const campusBuildings = [
     ],
     spaces: [
       'Coordinación de Servicio y Prácticas Profesionales',
+      'Psicología',
       'Oficina del Oficial Mayor',
     ],
     hours: '',
